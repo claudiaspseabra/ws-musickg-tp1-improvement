@@ -1,5 +1,5 @@
 """
-music_graph/similarity.py
+templates/similarity.py
 
 Recommendations engine — 3 algorithms:
   1. Audio Feature Cosine Similarity   (numpy + scipy)
@@ -14,8 +14,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-from music_graph.rdf_store import store
-from music_graph.sparql_queries import _PREFIXES, _round, _slug
+from templates.rdf_store import store
+from templates.sparql_queries import _PREFIXES, _round, _slug
 
 log = logging.getLogger(__name__)
 

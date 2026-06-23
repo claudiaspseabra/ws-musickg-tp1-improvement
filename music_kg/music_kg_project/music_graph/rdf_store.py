@@ -1,5 +1,5 @@
 """
-music_graph/rdf_store.py
+templates/rdf_store.py
 
 Dual-mode RDF store:
   - GraphDB mode  (default): queries go to GraphDB via HTTP SPARQL endpoint

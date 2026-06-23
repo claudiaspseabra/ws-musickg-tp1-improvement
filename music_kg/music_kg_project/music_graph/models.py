@@ -1,5 +1,5 @@
 """
-music_graph/models.py
+templates/models.py
 Minimal Django DB models — metadata & logging only.
 The actual data lives in the RDF graph (rdf_store.py).
 """

@@ -1,5 +1,5 @@
 """
-music_graph/sparql_queries.py
+templates/sparql_queries.py
 
 All SPARQL-backed query functions.
 Each function builds a query string, runs it through the RDFStore singleton,
@@ -249,11 +249,26 @@ def get_artist_detail(artist: str) -> Optional[Dict]:
 
     # Similar artists
     similar_q = _PREFIXES + f"""
-    SELECT ?simUri ?simName WHERE {{
-        {artist_ref} music:similarTo ?simUri .
-        ?simUri music:artistName ?simName .
-    }} LIMIT 10
-    """
+        SELECT ?simUri ?simName (COUNT(DISTINCT ?sharedGenre) AS ?overlapCount)
+        WHERE {{
+            # Encontrar géneros do artista atual
+            ?track1 music:performedBy {artist_ref} ;
+                    music:inGenre ?sharedGenre .
+
+            # Encontrar outros artistas que tocam faixas nesses mesmos géneros
+            ?track2 music:inGenre ?sharedGenre ;
+                    music:performedBy ?simUri .
+
+            ?simUri music:artistName ?simName .
+
+            # Excluir o próprio artista da lista de resultados
+            FILTER(?simUri != {artist_ref})
+        }} 
+        GROUP BY ?simUri ?simName
+        ORDER BY DESC(?overlapCount)
+        LIMIT 10
+        """
+
     similar = [
         {"uri": str(r["simUri"]), "slug": _slug(str(r["simUri"])), "name": str(r["simName"])}
         for r in store.execute_sparql(similar_q)

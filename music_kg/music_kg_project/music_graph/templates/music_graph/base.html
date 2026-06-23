@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MusicKG - Web Semântica{% endblock %}</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'bg-primary': '#0a0a0a',
+                        'bg-secondary': '#121212',
+                        'bg-card': '#1a1a1a',
+                        'bg-hover': '#242424',
+                        'accent': '#1db954',
+                        'accent-hover': '#1ed760',
+                        'text-primary': '#ffffff',
+                        'text-secondary': '#b3b3b3',
+                        'text-muted': '#535353',
+                        'border-col': '#282828',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0a0a0a; color: #ffffff; font-family: sans-serif; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <nav class="sticky top-0 z-50 bg-bg-secondary border-b border-border-col">
+        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2">
+                <span class="text-xl">🎵</span>
+                <span class="font-bold text-accent tracking-tight">MusicKG</span>
+            </a>
+
+            <form action="/search/" method="GET" class="flex items-center gap-2">
+                <input type="text" name="q" placeholder="Procurar artistas..."
+                       class="bg-bg-card border border-border-col rounded-full px-4 py-1.5 text-sm text-text-primary focus:border-accent outline-none">
+                <button type="submit" class="px-4 py-1.5 bg-accent text-black font-bold text-sm rounded-full hover:bg-accent-hover transition-colors">
+                    Pesquisar
+                </button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="flex-grow">
+        {% block content %}
+        {% endblock content %}
+    </main>
+
+</body>
+</html>

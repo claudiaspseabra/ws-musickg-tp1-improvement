@@ -1,10 +1,10 @@
 """
-music_graph/serializers.py
+templates/serializers.py
 DRF serializers for Django DB models only.
 RDF data is returned as plain dicts directly from views.
 """
 from rest_framework import serializers
-from music_graph.models import SPARQLQueryTemplate, SearchLog
+from templates.models import SPARQLQueryTemplate, SearchLog
 
 
 class SPARQLQueryTemplateSerializer(serializers.ModelSerializer):

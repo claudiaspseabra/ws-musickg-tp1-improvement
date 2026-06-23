@@ -1,12 +1,12 @@
 """
-music_graph/timeline.py
+templates/timeline.py
 
 Timeline and genre-evolution queries.
 """
 import logging
 from typing import List, Dict
-from music_graph.rdf_store import store
-from music_graph.sparql_queries import _PREFIXES, _round
+from templates.rdf_store import store
+from templates.sparql_queries import _PREFIXES, _round
 
 log = logging.getLogger(__name__)
 
