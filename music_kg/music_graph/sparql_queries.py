@@ -92,30 +92,36 @@ def get_artist_detail(artist: str) -> Optional[Dict]:
 
     # Tracks performed by this artist and their genres
     tracks_q = _PREFIXES + f"""
-    SELECT ?trackUri ?trackName ?genreLabel
-    WHERE {{
-        ?trackUri music:performedBy {artist_ref} ;
-                  music:trackName ?trackName ;
-                  music:inGenre ?g .
-        ?g music:label ?genreLabel .
-    }}
-    ORDER BY ?trackName
-    """
+        SELECT ?trackUri ?trackName (GROUP_CONCAT(DISTINCT ?genreLabel; SEPARATOR=", ") AS ?genres) (SAMPLE(?energy) AS ?trackEnergy)
+        WHERE {{
+            ?trackUri music:performedBy {artist_ref} ;
+                      music:trackName ?trackName .
+            OPTIONAL {{
+                ?trackUri music:inGenre ?g .
+                ?trackUri music:energy ?energy .
+                ?g music:label ?genreLabel .
+            }}
+        }}
+        GROUP BY ?trackUri ?trackName
+        ORDER BY ?trackName
+        """
 
     top_tracks = []
     genres_set = set()
 
     for r in store.execute_sparql(tracks_q):
-        genres_set.add(str(r.get("genreLabel", "")))
-        t = {
-            "uri":  str(r["trackUri"]),
+        genre_str = str(r.get("genres", ""))
+        # Alimentar os géneros do artista separando pela vírgula
+        for g in genre_str.split(", "):
+            if g.strip(): genres_set.add(g.strip())
+
+        top_tracks.append({
+            "uri": str(r["trackUri"]),
             "slug": _slug(str(r["trackUri"])),
             "name": str(r["trackName"]),
-            "genre": str(r.get("genreLabel", "")),
-        }
-        # Evitar duplicação visual de faixas se o GraphDB devolver múltiplos géneros para a mesma
-        if t["uri"] not in [track["uri"] for track in top_tracks]:
-             top_tracks.append(t)
+            "genre": genre_str if genre_str else "Sem género",
+            "energy": str(r.get("trackEnergy", "0.5")),
+        })
 
     album_q = _PREFIXES + f"""
         SELECT ?albumUri ?albumName ?year (COUNT(?track) AS ?trackCount) WHERE {{
@@ -221,38 +227,32 @@ def get_tracks(search=None, limit=50, offset=0) -> List[Dict]:
 # (Removido build_search_index_async para manter simplicidade e delegar
 # a pesquisa puramente no GraphDB via SPARQL)
 
-def full_text_search(query: str, limit: int = 20) -> dict:
+def full_text_search(query: str, entity_type: str = None, limit: int = 50) -> dict:
     q_lower = query.strip().lower() if query else ""
     if not q_lower:
         return {"results": [], "total_count": 0}
 
-    # Procura em Artistas e Faixas simultaneamente
+    # Novo filtro dinâmico de tipo
+    type_filter = ""
+    if entity_type in ['artist', 'track', 'album']:
+        type_filter = f'FILTER(?type = "{entity_type}")'
+
     graph_q = _PREFIXES + f"""
     SELECT DISTINCT ?uri ?name ?type ?slug WHERE {{
-        {{
-            ?uri music:artistName ?name . BIND("artist" AS ?type)
-        }}
+        {{ ?uri music:artistName ?name . BIND("artist" AS ?type) }}
         UNION 
-        {{
-            ?uri music:trackName ?name . BIND("track" AS ?type)
-        }}
-        UNION
-        {{
-            ?uri music:albumName ?name . BIND("album" AS ?type)
-        }}
-        
+        {{ ?uri music:trackName ?name . BIND("track" AS ?type) }}
+        UNION 
+        {{ ?uri music:albumName ?name . BIND("album" AS ?type) }}
+
         BIND(REPLACE(STR(?uri), "^.*[/#]", "") AS ?slug)
         FILTER(CONTAINS(LCASE(STR(?name)), "{q_lower}"))
+        {type_filter}
     }} LIMIT {limit}
     """
     graph_rows = store.execute_sparql(graph_q)
-    results = []
-
-    for r in graph_rows:
-        results.append({
-            "type": str(r["type"]), "uri": str(r["uri"]),
-            "slug": str(r["slug"]), "name": str(r["name"]),
-        })
+    results = [{"type": str(r["type"]), "uri": str(r["uri"]), "slug": str(r["slug"]), "name": str(r["name"])} for r in
+               graph_rows]
 
     return {"results": results, "total_count": len(results)}
 
@@ -261,24 +261,51 @@ def full_text_search(query: str, limit: int = 20) -> dict:
 # 5. CRUD OPERATIONS (WRITE/UPDATE/DELETE)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def add_new_track(artist_uri: str, track_name: str, genre_name: str, energy: float) -> bool:
-    """CREATE: Insere uma nova faixa completa com Audio Features."""
-    # Gerar URIs únicos
-    track_id = str(uuid.uuid4())[:8]
-    track_uri = f"<http://musickg.org/track/{track_id}>"
-    genre_slug = _slug(genre_name.lower())
-    genre_uri = f"<http://musickg.org/genre/{genre_slug}>"
-    a_uri = f"<{artist_uri}>"
+def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: float, album_slug: str = None) -> bool:
+    """CREATE: Insere nova faixa. Opcionalmente vincula-a a um álbum."""
+    import uuid
+    t_id = str(uuid.uuid4())[:8]
+    t_uri = f"<http://musickg.org/track/{t_id}>"
+    g_slug = quote(genre_name.lower().strip().replace(" ", "_"), safe="")
+    g_uri = f"<http://musickg.org/genre/{g_slug}>"
+    a_uri = f"<http://musickg.org/artist/{quote(artist_slug, safe='')}>"
+
+    album_triple = ""
+    if album_slug:
+        alb_uri = f"<http://musickg.org/album/{quote(album_slug, safe='')}>"
+        album_triple = f"{t_uri} music:inAlbum {alb_uri} ."
 
     query = _PREFIXES + f"""
     INSERT DATA {{
-        {track_uri} music:trackName "{track_name}" ;
-                    music:performedBy {a_uri} ;
-                    music:inGenre {genre_uri} ;
-                    music:energy "{energy}"^^xsd:float .
-
-        {genre_uri} music:label "{genre_name}" .
+        {t_uri} music:trackName "{track_name}" ;
+                music:performedBy {a_uri} ;
+                music:inGenre {g_uri} ;
+                music:energy "{energy}"^^xsd:float .
+        {album_triple}
+        {g_uri} music:label "{genre_name}" .
     }}
+    """
+    return store.execute_sparql_update(query)
+
+
+def remove_track_from_album(track_slug: str, album_slug: str) -> bool:
+    """REMOVE DO ÁLBUM: Apaga apenas a relação inAlbum. A faixa continua no sistema."""
+    t_uri = f"<http://musickg.org/track/{quote(track_slug, safe='')}>"
+    a_uri = f"<http://musickg.org/album/{quote(album_slug, safe='')}>"
+
+    query = _PREFIXES + f"DELETE DATA {{ {t_uri} music:inAlbum {a_uri} . }}"
+    return store.execute_sparql_update(query)
+
+
+def add_existing_track_to_album(track_slug: str, album_slug: str) -> bool:
+    """LIGA AO ÁLBUM: Associa uma faixa existente a este álbum (removendo de álbuns antigos)."""
+    t_uri = f"<http://musickg.org/track/{quote(track_slug, safe='')}>"
+    a_uri = f"<http://musickg.org/album/{quote(album_slug, safe='')}>"
+
+    query = _PREFIXES + f"""
+    DELETE {{ {t_uri} music:inAlbum ?oldAlb }}
+    INSERT {{ {t_uri} music:inAlbum {a_uri} }}
+    WHERE {{ OPTIONAL {{ {t_uri} music:inAlbum ?oldAlb }} }}
     """
     return store.execute_sparql_update(query)
 
@@ -327,12 +354,9 @@ def delete_artist(artist_slug: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_album_detail(album_slug: str) -> Optional[Dict]:
-    """Lê os detalhes de um Álbum e as faixas que o compõem."""
-    # Django descodifica a URL. Precisamos de voltar a codificar para o formato exato do GraphDB
     safe_slug = quote(album_slug, safe="")
     album_ref = f"<http://musickg.org/album/{safe_slug}>"
 
-    # Info básica do Álbum e do Artista (inferido pelas faixas do álbum)
     info_q = _PREFIXES + f"""
     SELECT ?name ?year ?artistUri ?artistName WHERE {{
         {album_ref} music:albumName ?name .
@@ -353,33 +377,52 @@ def get_album_detail(album_slug: str) -> Optional[Dict]:
 
     # Músicas que pertencem a este álbum
     tracks_q = _PREFIXES + f"""
-    SELECT DISTINCT ?trackUri ?trackName ?genreLabel WHERE {{
-        ?trackUri music:inAlbum {album_ref} ;
-                  music:trackName ?trackName ;
-                  music:inGenre ?g .
-        ?g music:label ?genreLabel .
-    }}
-    ORDER BY ?trackName
-    """
+        SELECT ?trackUri ?trackName (GROUP_CONCAT(DISTINCT ?genreLabel; SEPARATOR=", ") AS ?genres) (SAMPLE(?energy) AS ?trackEnergy) WHERE {{
+            ?trackUri music:inAlbum {album_ref} ;
+                      music:trackName ?trackName .
+            OPTIONAL {{
+                ?trackUri music:inGenre ?g .
+                ?trackUri music:energy ?energy .
+                ?g music:label ?genreLabel .
+            }}
+        }}
+        GROUP BY ?trackUri ?trackName
+        ORDER BY ?trackName
+        """
 
     tracks = [
         {
             "uri": str(r["trackUri"]),
             "slug": _slug(str(r["trackUri"])),
             "name": str(r["trackName"]),
-            "genre": str(r.get("genreLabel", "")),
+            "genre": str(r.get("genres", "Sem género")),
+            "energy": str(r.get("trackEnergy", "0.5")),
         }
         for r in store.execute_sparql(tracks_q)
     ]
 
+    # Músicas do mesmo artista que NÃO estão neste álbum (para o Dropdown)
+    other_tracks = []
+    if artist_uri:
+        other_tracks_q = _PREFIXES + f"""
+        SELECT DISTINCT ?trackUri ?trackName WHERE {{
+            ?trackUri music:performedBy <{artist_uri}> ;
+                      music:trackName ?trackName .
+            FILTER NOT EXISTS {{ ?trackUri music:inAlbum {album_ref} }}
+        }} ORDER BY ?trackName
+        """
+        for r in store.execute_sparql(other_tracks_q):
+            other_tracks.append({"slug": _slug(str(r["trackUri"])), "name": str(r["trackName"])})
+
     return {
         "uri": album_ref.strip("<>"),
-        "slug": album_slug,  # Retornamos o original para o Django
+        "slug": album_slug,
         "name": str(r0["name"]),
         "year": str(r0.get("year", "Desconhecido")),
         "artist_name": str(r0.get("artistName", "Vários Artistas")),
         "artist_slug": _slug(artist_uri) if artist_uri else "",
         "tracks": tracks,
+        "other_tracks": other_tracks, # Passamos as outras faixas para o HTML!
         "track_count": len(tracks)
     }
 
@@ -440,3 +483,152 @@ def delete_track(track_slug: str) -> bool:
     }}
     """
     return store.execute_sparql_update(query)
+
+
+def update_track(track_slug: str, track_name: str, genre_name: str, energy: float) -> bool:
+    """UPDATE: Altera o nome, género e energia de uma música existente."""
+    safe_slug = quote(track_slug, safe="")
+    t_uri = f"<http://musickg.org/track/{safe_slug}>"
+    g_slug = quote(genre_name.lower().strip().replace(" ", "_"), safe="")
+    new_g_uri = f"<http://musickg.org/genre/{g_slug}>"
+
+    query = _PREFIXES + f"""
+    DELETE {{
+        {t_uri} music:trackName ?oldName ;
+                music:inGenre ?oldGenre ;
+                music:energy ?oldEnergy .
+    }}
+    INSERT {{
+        {t_uri} music:trackName "{track_name}" ;
+                music:inGenre {new_g_uri} ;
+                music:energy "{energy}"^^xsd:float .
+        {new_g_uri} music:label "{genre_name}" .
+    }}
+    WHERE {{
+        OPTIONAL {{ {t_uri} music:trackName ?oldName . }}
+        OPTIONAL {{ {t_uri} music:inGenre ?oldGenre . }}
+        OPTIONAL {{ {t_uri} music:energy ?oldEnergy . }}
+    }}
+    """
+    return store.execute_sparql_update(query)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. QUERIES DE VALIDAÇÃO (ASK) E CRIAÇÃO
+# ─────────────────────────────────────────────────────────────────────────────
+
+def ask_artist_exists(artist_name: str) -> bool:
+    """ASK: Verifica se um artista já existe no Grafo (case-insensitive)."""
+    # Escapar aspas para evitar quebras no SPARQL
+    safe_name = artist_name.replace('"', '\\"')
+
+    query = _PREFIXES + f"""
+    ASK {{
+        ?a music:artistName ?name .
+        FILTER(LCASE(STR(?name)) = LCASE("{safe_name}"))
+    }}
+    """
+    return store.execute_ask(query)
+
+
+def ask_track_exists(artist_slug: str, track_name: str) -> bool:
+    """ASK: Verifica se uma música com este nome já existe para este artista."""
+    safe_name = track_name.replace('"', '\\"')
+    a_uri = f"<http://musickg.org/artist/{quote(artist_slug, safe='')}>"
+
+    query = _PREFIXES + f"""
+    ASK {{
+        ?track music:performedBy {a_uri} ;
+               music:trackName ?name .
+        FILTER(LCASE(STR(?name)) = LCASE("{safe_name}"))
+    }}
+    """
+    return store.execute_ask(query)
+
+def create_new_artist(artist_name: str) -> str:
+    """CREATE: Insere um novo artista no Grafo."""
+    safe_slug = quote(artist_name.lower().strip().replace(" ", "_"), safe="")
+    a_uri = f"<http://musickg.org/artist/{safe_slug}>"
+
+    query = _PREFIXES + f"""
+    INSERT DATA {{
+        {a_uri} music:artistName "{artist_name}" .
+    }}
+    """
+    store.execute_sparql_update(query)
+    return safe_slug
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. GRAFOS BRUTOS (DESCRIBE E CONSTRUCT)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def describe_artist(slug: str) -> str:
+    """DESCRIBE: Obtém todos os triplos onde o artista é sujeito ou objeto."""
+    a_uri = f"<http://musickg.org/artist/{quote(slug, safe='')}>"
+    query = _PREFIXES + f"DESCRIBE {a_uri}"
+    return store.execute_graph_query(query)
+
+def construct_artist_export(slug: str) -> str:
+    """CONSTRUCT: Cria um mini-grafo com o artista, os seus álbuns e as suas faixas."""
+    a_uri = f"<http://musickg.org/artist/{quote(slug, safe='')}>"
+    query = _PREFIXES + f"""
+    CONSTRUCT {{
+        {a_uri} ?p ?o .
+        ?track music:performedBy {a_uri} ;
+               music:trackName ?tName ;
+               music:inGenre ?genre .
+        ?album music:albumName ?albName .
+        {a_uri} music:hasAlbum ?album .
+    }}
+    WHERE {{
+        {a_uri} ?p ?o .
+        OPTIONAL {{
+            ?track music:performedBy {a_uri} ;
+                   music:trackName ?tName ;
+                   music:inGenre ?genre .
+        }}
+        OPTIONAL {{
+            ?track music:performedBy {a_uri} ;
+                   music:inAlbum ?album .
+            ?album music:albumName ?albName .
+        }}
+    }}
+    """
+    return store.execute_graph_query(query)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. ESTATÍSTICAS E GRÁFICOS (AGREGAÇÃO SPARQL)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_top_genres_stats(limit: int = 10) -> list:
+    """Retorna os géneros com mais músicas no grafo."""
+    query = _PREFIXES + f"""
+    SELECT ?genreLabel (COUNT(?track) AS ?count) WHERE {{
+        ?track music:inGenre ?g .
+        ?g music:label ?genreLabel .
+    }}
+    GROUP BY ?genreLabel
+    ORDER BY DESC(?count)
+    LIMIT {limit}
+    """
+    return [
+        {"label": str(r["genreLabel"]).title(), "count": int(r["count"])}
+        for r in store.execute_sparql(query)
+    ]
+
+def get_avg_energy_by_genre(limit: int = 10) -> list:
+    """Retorna a energia média das músicas agrupadas por género."""
+    query = _PREFIXES + f"""
+    SELECT ?genreLabel (AVG(?energy) AS ?avgEnergy) WHERE {{
+        ?track music:inGenre ?g ;
+               music:energy ?energy .
+        ?g music:label ?genreLabel .
+    }}
+    GROUP BY ?genreLabel
+    ORDER BY DESC(?avgEnergy)
+    LIMIT {limit}
+    """
+    return [
+        {"label": str(r["genreLabel"]).title(), "avg": float(r["avgEnergy"])}
+        for r in store.execute_sparql(query)
+    ]

@@ -3,38 +3,94 @@
 {% block title %}Pesquisa - MusicKG{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-6 py-8">
-    <h1 class="text-2xl font-bold mb-6">Resultados da Pesquisa</h1>
+<div class="max-w-4xl mx-auto px-6 py-10">
 
-    {% if query or genre %}
-        <p class="text-text-secondary mb-8">
-            Encontrados <span class="font-bold text-accent">{{ total_count }}</span> resultados
-            {% if query %} para "<span class="text-white">{{ query }}</span>"{% endif %}
-        </p>
+    <h1 class="text-4xl font-extrabold text-text-primary mb-8">Explorar o Grafo</h1>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {% for item in results %}
-            <a href="/artist/{{ item.slug }}" class="block bg-bg-card border border-border-col rounded-xl p-4 hover:border-accent transition-colors">
-                <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl mb-3 bg-bg-hover">
-                    {% if item.type == 'artist' %}🎤{% elif item.type == 'album' %}💿{% else %}🎵{% endif %}
-                </div>
-                <h3 class="font-bold text-text-primary truncate">{{ item.name }}</h3>
-                <p class="text-xs text-text-muted mt-1 uppercase tracking-wider">{{ item.type }}</p>
-                {% if item.extra_info.popularity %}
-                    <p class="text-xs text-accent mt-2">Pop: {{ item.extra_info.popularity }} / 100</p>
-                {% endif %}
-            </a>
-            {% empty %}
-            <div class="col-span-full py-12 text-center text-text-muted">
-                Não foram encontrados resultados para a tua pesquisa.
-            </div>
-            {% endfor %}
+    <form action="{% url 'search' %}" method="GET" class="flex flex-col md:flex-row gap-3 w-full mb-12">
+
+        <input type="text" name="q" value="{{ query }}" placeholder="Pesquisar artistas, álbuns ou músicas..."
+               class="flex-grow bg-bg-card border border-border-col rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent text-lg">
+
+        <select name="type" class="bg-bg-card border border-border-col rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent font-semibold cursor-pointer">
+            <option value="all" {% if current_type == 'all' %}selected{% endif %}>Tudo</option>
+            <option value="artist" {% if current_type == 'artist' %}selected{% endif %}>Artistas</option>
+            <option value="album" {% if current_type == 'album' %}selected{% endif %}>Álbuns</option>
+            <option value="track" {% if current_type == 'track' %}selected{% endif %}>Músicas</option>
+        </select>
+
+        <button type="submit" class="bg-accent text-black font-bold px-8 py-3 rounded-lg hover:bg-accent-hover transition-colors text-lg">
+            Pesquisar
+        </button>
+    </form>
+
+
+    {% if query %}
+        <div class="mb-6 flex justify-between items-center border-b border-border-col pb-4">
+            <h2 class="text-xl font-bold text-text-primary">
+                Resultados para "<span class="text-accent">{{ query }}</span>"
+            </h2>
+            <span class="text-sm text-text-muted bg-bg-card px-3 py-1 rounded-full border border-border-col">
+                {{ total_count }} encontrado(s)
+            </span>
         </div>
+
+        <div class="flex flex-col gap-4">
+            {% for item in results %}
+
+                <a href="/{% if item.type == 'artist' %}artist{% else %}album{% endif %}/{{ item.slug }}"
+                   class="flex items-center gap-4 p-4 bg-bg-card rounded-xl border border-border-col hover:border-accent transition-colors group {% if item.type == 'track' %}cursor-default pointer-events-none{% endif %}">
+
+                    <div class="w-12 h-12 rounded-lg flex items-center justify-center text-xl bg-bg-secondary group-hover:bg-accent group-hover:text-black transition-colors">
+                        {% if item.type == 'artist' %}🎤
+                        {% elif item.type == 'album' %}💿
+                        {% else %}🎵{% endif %}
+                    </div>
+
+                    <div>
+                        <h3 class="font-bold text-lg text-text-primary group-hover:text-accent transition-colors">
+                            {{ item.name }}
+                        </h3>
+
+                        <span class="inline-block mt-1 text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm
+                            {% if item.type == 'artist' %}bg-blue-900/30 text-blue-400 border border-blue-800
+                            {% elif item.type == 'album' %}bg-purple-900/30 text-purple-400 border border-purple-800
+                            {% else %}bg-emerald-900/30 text-emerald-400 border border-emerald-800{% endif %}">
+                            {{ item.type }}
+                        </span>
+                    </div>
+                </a>
+
+            {% empty %}
+                <div class="text-center py-16 bg-bg-card rounded-xl border border-border-col">
+                    <div class="text-4xl mb-4">🤷‍♂️</div>
+                    <h3 class="text-xl font-bold text-text-primary mb-2">Nada encontrado</h3>
+                    <p class="text-text-muted">Não encontrámos resultados para a tua pesquisa. Tenta com outros termos ou remove os filtros.</p>
+                </div>
+            {% endfor %}
+            {% if can_create_artist %}
+                <div class="mt-8 p-6 bg-bg-secondary rounded-xl border-2 border-dashed border-accent flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div>
+                        <h3 class="text-xl font-bold text-white mb-1">Não encontraste "{{ query }}"?</h3>
+                        <p class="text-sm text-text-muted">A nossa query ASK confirmou que este artista não existe no Grafo. Queres adicioná-lo?</p>
+                    </div>
+                    <form action="{% url 'create-artist' %}" method="POST" class="shrink-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="artist_name" value="{{ query }}">
+                        <button type="submit" class="bg-accent text-black font-bold px-6 py-3 rounded-lg hover:bg-accent-hover transition-colors shadow-[0_0_15px_rgba(30,215,96,0.3)]">
+                            ✨ Adicionar "{{ query }}"
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+
     {% else %}
-        <div class="py-24 text-center text-text-muted">
-            <div class="text-5xl mb-4">🔍</div>
-            <p>Usa a barra de navegação acima para pesquisar artistas, álbuns ou músicas.</p>
+        <div class="text-center py-20 opacity-50">
+            <div class="text-6xl mb-6">🔍</div>
+            <p class="text-lg text-text-primary">Usa a barra acima para pesquisar no Knowledge Graph.</p>
         </div>
     {% endif %}
+
 </div>
 {% endblock %}

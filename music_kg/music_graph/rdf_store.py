@@ -234,5 +234,42 @@ class _RDFStore:
         stats["repository"] = GRAPHDB_REPOSITORY
         return stats
 
+    def execute_ask(self, query_string: str) -> bool:
+        """Executa uma query ASK e devolve True ou False."""
+        if not self._use_graphdb:
+            return False
+        try:
+            import requests
+            r = requests.post(
+                self._sparql_url,
+                data={"query": query_string},
+                headers={"Accept": "application/sparql-results+json"},
+                timeout=10,
+            )
+            if r.status_code == 200:
+                return r.json().get("boolean", False)
+            return False
+        except Exception as e:
+            log.warning(f"Exceção SPARQL ASK: {e}")
+            return False
+
+    def execute_graph_query(self, query_string: str, accept_format: str = "text/turtle") -> str:
+        """Executa queries DESCRIBE ou CONSTRUCT e devolve a string no formato RDF."""
+        if not self._use_graphdb:
+            return ""
+        try:
+            import requests
+            r = requests.post(
+                self._sparql_url,
+                data={"query": query_string},
+                headers={"Accept": accept_format},
+                timeout=15,
+            )
+            if r.status_code == 200:
+                return r.text
+            return f"# Erro SPARQL: {r.status_code}\n{r.text}"
+        except Exception as e:
+            return f"# Exceção de Rede: {e}"
+
 # Singleton Instantiation
 store = _RDFStore()

@@ -30,22 +30,34 @@
         body { background-color: #0a0a0a; color: #ffffff; font-family: sans-serif; }
     </style>
 </head>
+
 <body class="antialiased min-h-screen flex flex-col">
 
     <nav class="sticky top-0 z-50 bg-bg-secondary border-b border-border-col">
-        <div class="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
-            <a href="/" class="flex items-center gap-2">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
+
+            <a href="{% url 'home' %}" class="flex items-center gap-2 shrink-0">
                 <span class="text-xl">🎵</span>
                 <span class="font-bold text-accent tracking-tight">MusicKG</span>
             </a>
 
-            <form action="/search/" method="GET" class="flex items-center gap-2">
-                <input type="text" name="q" placeholder="Procurar artistas..."
-                       class="bg-bg-card border border-border-col rounded-full px-4 py-1.5 text-sm text-text-primary focus:border-accent outline-none">
-                <button type="submit" class="px-4 py-1.5 bg-accent text-black font-bold text-sm rounded-full hover:bg-accent-hover transition-colors">
-                    Pesquisar
-                </button>
-            </form>
+            <div class="flex items-center gap-6 shrink-0">
+
+                <a href="{% url 'stats' %}" class="hidden sm:block text-sm font-bold hover:text-white transition-colors {% if request.resolver_match.url_name == 'stats' %}text-accent{% else %}text-text-secondary{% endif %}">
+                    Estatísticas
+                </a>
+
+                <form action="{% url 'search' %}" method="GET" class="flex items-center gap-2">
+                    <input type="text" name="q" placeholder="Procurar artistas..."
+                           class="bg-bg-card border border-border-col rounded-full px-4 py-1.5 text-sm text-text-primary focus:border-accent outline-none w-48 lg:w-64">
+                    <input type="hidden" name="type" value="all">
+                    <button type="submit" class="px-4 py-1.5 bg-accent text-black font-bold text-sm rounded-full hover:bg-accent-hover transition-colors">
+                        Pesquisar
+                    </button>
+                </form>
+
+            </div>
+
         </div>
     </nav>
 
@@ -53,6 +65,13 @@
         {% block content %}
         {% endblock content %}
     </main>
+
+    <footer class="bg-bg-secondary border-t border-border-col py-6 px-6 mt-auto text-center text-xs text-text-muted">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
+            <p>&copy; 2026 MusicKG — Trabalho Prático 1 (Grafo Factual SPARQL Puro)</p>
+            <p class="font-mono text-accent">Status: GraphDB Connected</p>
+        </div>
+    </footer>
 
 </body>
 </html>
