@@ -1,0 +1,38 @@
+{% extends 'music_graph/base.html' %}
+
+{% block content %}
+<section class="flex flex-col items-center justify-center px-6 py-24 text-center">
+    <h1 class="text-4xl md:text-6xl font-extrabold text-text-primary leading-tight mb-4">
+        Explora a Música como um<br />
+        <span class="text-accent">Knowledge Graph</span>
+    </h1>
+    <p class="text-text-secondary text-lg mb-8">
+        {{ stats.unique_artists }} artistas ·
+        {{ stats.unique_albums }} álbuns ·
+        {{ stats.unique_tracks }} faixas
+    </p>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto mt-8 w-full">
+        <div class="bg-bg-card border border-border-col rounded-xl p-5">
+            <div class="text-2xl mb-2">🎤</div>
+            <div class="text-2xl font-bold">{{ stats.unique_artists }}</div>
+            <div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Artistas</div>
+        </div>
+        <div class="bg-bg-card border border-border-col rounded-xl p-5">
+            <div class="text-2xl mb-2">💿</div>
+            <div class="text-2xl font-bold">{{ stats.unique_albums }}</div>
+            <div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Álbuns</div>
+        </div>
+        <div class="bg-bg-card border border-border-col rounded-xl p-5">
+            <div class="text-2xl mb-2">🎵</div>
+            <div class="text-2xl font-bold">{{ stats.unique_tracks }}</div>
+            <div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Faixas</div>
+        </div>
+        <div class="bg-bg-card border border-border-col rounded-xl p-5">
+            <div class="text-2xl mb-2">🔗</div>
+            <div class="text-2xl font-bold">{{ stats.total_triples }}</div>
+            <div class="text-xs text-text-muted mt-1 uppercase tracking-wider">Triplos RDF</div>
+        </div>
+    </div>
+</section>
+{% endblock %}

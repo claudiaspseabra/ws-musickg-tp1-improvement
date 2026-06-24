@@ -1,0 +1,16 @@
+"""
+music_kg_project/urls.py
+"""
+from django.contrib import admin
+from django.urls import path, include
+from django.http import JsonResponse
+
+
+def health_check(request):
+    return JsonResponse({"status": "ok", "service": "Music Knowledge Graph API"})
+
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', include('music_graph.urls')),
+]

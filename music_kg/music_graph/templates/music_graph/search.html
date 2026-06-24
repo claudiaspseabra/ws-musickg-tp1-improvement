@@ -1,0 +1,40 @@
+{% extends 'music_graph/base.html' %}
+
+{% block title %}Pesquisa - MusicKG{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-6 py-8">
+    <h1 class="text-2xl font-bold mb-6">Resultados da Pesquisa</h1>
+
+    {% if query or genre %}
+        <p class="text-text-secondary mb-8">
+            Encontrados <span class="font-bold text-accent">{{ total_count }}</span> resultados
+            {% if query %} para "<span class="text-white">{{ query }}</span>"{% endif %}
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {% for item in results %}
+            <a href="/artist/{{ item.slug }}" class="block bg-bg-card border border-border-col rounded-xl p-4 hover:border-accent transition-colors">
+                <div class="w-12 h-12 rounded-full flex items-center justify-center text-xl mb-3 bg-bg-hover">
+                    {% if item.type == 'artist' %}🎤{% elif item.type == 'album' %}💿{% else %}🎵{% endif %}
+                </div>
+                <h3 class="font-bold text-text-primary truncate">{{ item.name }}</h3>
+                <p class="text-xs text-text-muted mt-1 uppercase tracking-wider">{{ item.type }}</p>
+                {% if item.extra_info.popularity %}
+                    <p class="text-xs text-accent mt-2">Pop: {{ item.extra_info.popularity }} / 100</p>
+                {% endif %}
+            </a>
+            {% empty %}
+            <div class="col-span-full py-12 text-center text-text-muted">
+                Não foram encontrados resultados para a tua pesquisa.
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="py-24 text-center text-text-muted">
+            <div class="text-5xl mb-4">🔍</div>
+            <p>Usa a barra de navegação acima para pesquisar artistas, álbuns ou músicas.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
