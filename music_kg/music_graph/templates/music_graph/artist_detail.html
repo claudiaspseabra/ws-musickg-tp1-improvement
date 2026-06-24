@@ -1,0 +1,150 @@
+{% extends 'music_graph/base.html' %}
+
+{% block title %}{{ artist.name }} - MusicKG{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-6 py-10">
+
+    <div class="flex items-center gap-6 mb-10 border-b border-border-col pb-8">
+        <div class="w-32 h-32 bg-bg-card rounded-full flex items-center justify-center text-6xl border-4 border-accent">
+            🎤
+        </div>
+        <div>
+            <h1 class="text-5xl font-extrabold text-text-primary mb-3">{{ artist.name }}</h1>
+            <div class="flex flex-wrap gap-2">
+                {% for genre in artist.genres %}
+                    <span class="px-3 py-1 bg-bg-hover text-text-secondary rounded-full text-sm font-semibold uppercase tracking-wider">
+                        {{ genre }}
+                    </span>
+                {% empty %}
+                    <span class="text-text-muted text-sm">Sem género associado</span>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-text-muted mt-3 font-mono break-all">{{ artist.uri }}</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="p-4 mb-6 text-sm rounded-lg bg-bg-hover text-accent font-bold border border-accent">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="flex gap-4 mb-10 bg-bg-card p-6 rounded-xl border border-border-col">
+        <form action="{% url 'add-track' artist.slug %}" method="POST" class="flex-grow flex gap-3 items-end">
+            {% csrf_token %}
+            <div class="flex-grow">
+                <label class="text-xs text-text-muted mb-1 block">Nova Faixa</label>
+                <input type="text" name="track_name" required placeholder="Ex: Shape of You" class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+            </div>
+            <div class="w-1/4">
+                <label class="text-xs text-text-muted mb-1 block">Género</label>
+                <input type="text" name="genre_name" required placeholder="Ex: Pop" class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+            </div>
+            <div class="w-1/6">
+                <label class="text-xs text-text-muted mb-1 block">Energia (0 a 1)</label>
+                <input type="number" step="0.1" min="0" max="1" name="energy" required value="0.8" class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+            </div>
+            <button type="submit" class="bg-accent text-black font-bold px-4 py-2 rounded hover:bg-accent-hover text-sm h-[38px]">
+                + Adicionar
+            </button>
+        </form>
+
+        <form action="{% url 'delete-artist' artist.slug %}" method="POST" onsubmit="return confirm('ATENÇÃO: Vai apagar este Artista e TODAS as suas faixas permanentemente. Confirma?');">            {% csrf_token %}
+            <button type="submit" class="bg-red-600 text-white font-bold px-4 py-2 rounded hover:bg-red-700 text-sm h-[38px] mt-[20px]">
+                🗑️ Apagar Artista
+            </button>
+        </form>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
+        <div class="lg:col-span-2">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                🎵 Faixas no Grafo
+            </h2>
+
+            <div class="bg-bg-card rounded-xl overflow-hidden border border-border-col">
+                {% for track in artist.top_tracks %}
+                <div class="flex items-center justify-between p-4 border-b border-border-col hover:bg-bg-hover transition-colors last:border-0">
+                    <div class="flex items-center gap-4">
+                        <span class="text-text-muted font-mono w-4 text-right">{{ forloop.counter }}</span>
+                        <div>
+                            <p class="font-bold text-text-primary">{{ track.name }}</p>
+                            <p class="text-xs text-text-muted">{{ track.genre|title }}</p>
+                        </div>
+                    </div>
+                    <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Deseja mesmo apagar a faixa {{ track.name }}?');">
+                        {% csrf_token %}
+                        <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
+                        <button type="submit" class="text-text-muted hover:text-red-500 transition-colors p-2" title="Apagar Faixa">
+                            ✕
+                        </button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="p-8 text-center text-text-muted">
+                    Nenhuma faixa encontrada para este artista.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    <div class="lg:col-span-2 mt-8">
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                💿 Álbuns do Artista
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {% for album in artist.albums %}
+                <div class="p-4 bg-bg-card rounded-xl border border-border-col hover:border-accent transition-colors relative group">
+                    <a href="/album/{{ album.slug }}" class="block">
+                        <h3 class="font-bold text-text-primary text-lg truncate">{{ album.name }}</h3>
+                        <p class="text-sm text-text-muted mt-1">Ano: {{ album.year }}</p>
+                        <p class="text-xs text-accent mt-2">{{ album.track_count }} faixa(s)</p>
+                    </a>
+
+                    <form action="{% url 'delete-album' album.slug %}" method="POST" class="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity" onsubmit="return confirm('Tem a certeza que deseja eliminar o álbum {{ album.name }}? As faixas serão mantidas como singles.');">
+                        {% csrf_token %}
+                        <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
+                        <button type="submit" class="text-text-muted hover:text-red-500 bg-bg-secondary rounded-full w-8 h-8 flex items-center justify-center">
+                            🗑️
+                        </button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="col-span-full p-6 text-center text-text-muted bg-bg-card rounded-xl">
+                    Sem álbuns registados.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+                🔗 Relacionados (SPARQL)
+            </h2>
+            <p class="text-sm text-text-muted mb-4">
+                Artistas descobertos inferindo conexões de géneros musicais partilhados.
+            </p>
+
+            <div class="flex flex-col gap-3">
+                {% for sim in artist.similar_artists %}
+                <a href="/artist/{{ sim.slug }}" class="flex items-center gap-3 p-3 rounded-lg bg-bg-card hover:bg-bg-hover border border-transparent hover:border-accent transition-colors">
+                    <div class="w-10 h-10 bg-bg-secondary rounded-full flex items-center justify-center text-lg">
+                        🎸
+                    </div>
+                    <div>
+                        <p class="font-bold text-sm text-text-primary">{{ sim.name }}</p>
+                    </div>
+                </a>
+                {% empty %}
+                <div class="p-6 text-center text-text-muted bg-bg-card rounded-xl">
+                    Sem conexões no grafo.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

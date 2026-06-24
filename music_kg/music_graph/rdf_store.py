@@ -1,52 +1,39 @@
 """
-templates/rdf_store.py
+music_graph/rdf_store.py
 
-Dual-mode RDF store:
-  - GraphDB mode  (default): queries go to GraphDB via HTTP SPARQL endpoint
-  - rdflib  mode  (fallback): in-memory ConjunctiveGraph when GraphDB is down
+Camada de Persistência RDF (GraphDB HTTP)
+Otimizada para o TP1: Factos Puros, Auto-Configuração e Upload Robusto em Streaming.
 """
 import json
 import logging
 import time
 import requests
-import os
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from rdflib import Namespace
-from rdflib.namespace import RDF, RDFS, OWL, XSD
 
-# Namespaces (kept at module level for backward compatibility)
+# Namespaces (Apenas dados, sem ontologia formal)
 BASE = Namespace("http://musickg.org/")
-MUSIC = Namespace("http://musickg.org/ontology#")
-SCHEMA = Namespace("http://schema.org/")
+MUSIC = Namespace("http://musickg.org/data/")
 
 log = logging.getLogger(__name__)
 
-# GraphDB defaults
+# Configurações do Servidor
 GRAPHDB_URL = "http://localhost:7200"
 GRAPHDB_REPOSITORY = "music-kg-tp1"
-
 GRAPHDB_USER = "admin"
 GRAPHDB_PASS = "root"
 
 class _RDFStore:
-    """
-    Singleton RDF store.
-    Automatically detects whether GraphDB is running.
-    Falls back to rdflib in-memory if GraphDB is unavailable.
-    """
-
     def __init__(self):
-        self._stats:        dict = {}
-        self._loaded:       bool = False
-        self._use_graphdb:  bool = False
-        self._sparql_url:   str = ""
-        self._update_url:   str = ""
-        # rdflib fallback
-        self._graph = None
+        self._stats: dict = {}
+        self._loaded: bool = False
+        self._use_graphdb: bool = False
 
-    # ── Public API ────────────────────────────────────────────────────────────
+        # Endpoints (resolvidos dinamicamente)
+        self._sparql_url = f"{GRAPHDB_URL}/repositories/{GRAPHDB_REPOSITORY}"
+        self._update_url = f"{self._sparql_url}/statements"
 
     @property
     def loaded(self) -> bool:
@@ -58,110 +45,92 @@ class _RDFStore:
 
     def load(self, nt_path: Path, stats_path: Path) -> None:
         """
-        Called once from AppConfig.ready().
-        Tries GraphDB first; falls back to rdflib.
+        Ponto de entrada no arranque do Django (AppConfig.ready).
+        Tenta configurar e carregar os dados no GraphDB automaticamente.
         """
-        if self._loaded:
-            log.warning("RDFStore.load() called twice — skipping.")
-            return
+        if self._loaded: return
 
         if stats_path.exists():
-            with open(stats_path, encoding="utf-8") as f:
-                self._stats = json.load(f)
-            log.info("RDFStore: stats.json loaded.")
-        else:
-            self._stats = {}
+            try:
+                with open(stats_path, encoding="utf-8") as f:
+                    self._stats = json.load(f)
+            except Exception:
+                pass
 
-        # Try GraphDB
-        if self._try_graphdb(nt_path):
-            self._loaded = True
-            return
+        log.info("A iniciar ligação ao GraphDB...")
 
-        # Fallback: rdflib in-memory
-        log.warning("GraphDB unavailable — falling back to rdflib in-memory.")
-        self._load_rdflib(nt_path)
+        # Tenta ligar ao GraphDB com retries (para dar tempo ao Tomcat de arrancar)
+        for attempt in range(3):
+            if self._try_graphdb(nt_path):
+                self._loaded = True
+                return
+            log.warning(f"GraphDB não respondeu (tentativa {attempt+1}/3). Aguardando 3s...")
+            time.sleep(3)
+
+        # Fallback Seguro: Em vez de bloquear o PC com rdflib, assume falha graciosa.
+        log.error("CRÍTICO: GraphDB não está acessível. A aplicação irá correr sem dados.")
         self._loaded = True
-
-    # ── GraphDB ───────────────────────────────────────────────────────────────
+        self._use_graphdb = False
 
     def _try_graphdb(self, nt_path: Path) -> bool:
-        """
-        Check if GraphDB is running and the repository exists.
-        If the repo is empty, upload the NT file automatically.
-        Returns True if GraphDB is ready to use.
-        """
-        repo_url = f"{GRAPHDB_URL}/repositories/{GRAPHDB_REPOSITORY}"
-        self._sparql_url = repo_url
-        self._update_url = f"{repo_url}/statements"
-
+        """Verifica se o repositório existe, cria-o se necessário e faz upload dos dados."""
         try:
-            # Ping GraphDB
-            r = requests.get(
-                f"{GRAPHDB_URL}/rest/repositories",
-                timeout=3,
-                headers={"Accept": "application/json"},
-            )
+            # 1. Ping ao servidor
+            r = requests.get(f"{GRAPHDB_URL}/rest/repositories", timeout=5, headers={"Accept": "application/json"})
             if r.status_code != 200:
                 return False
 
+            # 2. Verifica/Cria repositório
             repos = [rep.get("id") for rep in r.json()]
             if GRAPHDB_REPOSITORY not in repos:
-                log.info(
-                    f"GraphDB repository '{GRAPHDB_REPOSITORY}' not found — creating it.")
+                log.info(f"Repositório '{GRAPHDB_REPOSITORY}' não existe. A criar (Ruleset: empty)...")
                 if not self._create_repository():
                     return False
+                time.sleep(2) # Espera que o repositório inicialize internamente
 
-            # Check triple count
+            # 3. Verifica dados e faz upload se estiver vazio
             count = self._graphdb_triple_count()
-
             if count < 500 and nt_path.exists():
-                log.info(f"GraphDB only has {count} triples (Ontology only). Starting full data upload...")
-
+                log.info(f"Repositório quase vazio ({count} triplos). A iniciar upload do ficheiro .nt...")
                 if self._upload_nt(nt_path):
-                    count = self._graphdb_triple_count()
-                    log.info(f"Auto-upload successful. Now have {count:,} triples.")
+                    novo_count = self._graphdb_triple_count()
+                    log.info(f"Upload concluído com sucesso! O Grafo tem agora {novo_count:,} triplos.")
                 else:
-                    log.error("Auto-upload failed.")
+                    log.error("Falha no upload automático.")
                     return False
 
             self._use_graphdb = True
             return True
-
         except requests.exceptions.ConnectionError:
-            log.info("GraphDB not reachable at %s", GRAPHDB_URL)
             return False
         except Exception as e:
-            log.warning(f"GraphDB check failed: {e}")
+            log.warning(f"Erro na verificação do GraphDB: {e}")
             return False
 
     def _create_repository(self) -> bool:
-        """Create the music-kg repository in GraphDB."""
+        """Cria o repositório via API garantindo que o ruleset é 'empty' (Factos Puros)."""
+        config = f"""
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        @prefix rep: <http://www.openrdf.org/config/repository#> .
+        @prefix sr: <http://www.openrdf.org/config/repository/sail#> .
+        @prefix sail: <http://www.openrdf.org/config/sail#> .
+        @prefix owlim: <http://www.ontotext.com/trree/owlim#> .
+        [] a rep:Repository ;
+           rep:repositoryID "{GRAPHDB_REPOSITORY}" ;
+           rdfs:label "Music Knowledge Graph TP1" ;
+           rep:repositoryImpl [
+             rep:repositoryType "graphdb:SailRepository" ;
+             sr:sailImpl [
+               sail:sailType "graphdb:Sail" ;
+               owlim:base-URL "http://musickg.org/" ;
+               owlim:ruleset "empty" ;
+               owlim:entity-index-size "10000000" ;
+               owlim:cache-memory "256m" ;
+               owlim:tuple-index-memory "256m" 
+             ]
+           ].
+        """
         try:
-            config = (
-                "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>.\n"
-                "@prefix rep: <http://www.openrdf.org/config/repository#>.\n"
-                "@prefix sr: <http://www.openrdf.org/config/repository/sail#>.\n"
-                "@prefix sail: <http://www.openrdf.org/config/sail#>.\n"
-                "@prefix owlim: <http://www.ontotext.com/trree/owlim#>.\n"
-                "[] a rep:Repository ;\n"
-                f"   rep:repositoryID \"{GRAPHDB_REPOSITORY}\" ;\n"
-                f"   rdfs:label \"Music Knowledge Graph\" ;\n"
-                "   rep:repositoryImpl [\n"
-                "     rep:repositoryType \"graphdb:SailRepository\" ;\n"
-                "     sr:sailImpl [\n"
-                "       sail:sailType \"graphdb:Sail\" ;\n"
-                "       owlim:base-URL \"http://musickg.org/\" ;\n"
-                "       owlim:defaultNS \"\" ;\n"
-                "       owlim:entity-index-size \"10000000\" ;\n"
-                "       owlim:ruleset \"empty\" ;\n"
-                "       owlim:storage-folder \"storage\" ;\n"
-                "       owlim:enable-context-index \"true\" ;\n"
-                "       owlim:enablePredicateList \"true\" ;\n"
-                "       owlim:cache-memory \"512m\" ;\n"
-                "       owlim:tuple-index-memory \"512m\" ;\n"
-                "     ]\n"
-                "   ].\n"
-            )
             r = requests.post(
                 f"{GRAPHDB_URL}/rest/repositories",
                 data=config,
@@ -171,176 +140,80 @@ class _RDFStore:
             )
             return r.status_code in (200, 201)
         except Exception as e:
-            log.warning(f"Failed to create repository: {e}")
+            log.warning(f"Falha ao criar repositório: {e}")
             return False
 
     def _upload_nt(self, nt_path: Path) -> bool:
-        """Upload robusto em blocos (chunked) para evitar ConnectionAbortedError."""
+        """Upload em streaming via /statements (O método mais estável do GraphDB)."""
         try:
-            url = f"{GRAPHDB_URL}/rest/data/import/upload/{GRAPHDB_REPOSITORY}/file"
-
-            # Função geradora para enviar em blocos
-            def read_in_chunks(file_object, chunk_size=1024 * 1024):
-                while True:
-                    data = file_object.read(chunk_size)
-                    if not data:
-                        break
-                    yield data
-
             with open(nt_path, 'rb') as f:
-                response = requests.post(
-                    url,
-                    data=read_in_chunks(f),
+                # O parâmetro data=f faz com que a biblioteca requests envie o ficheiro
+                # gradualmente, evitando estourar a memória RAM e evitando erros 10053.
+                r = requests.post(
+                    self._update_url,
+                    data=f,
                     auth=(GRAPHDB_USER, GRAPHDB_PASS),
-                    headers={'Content-Type': 'application/x-ntriples'},
-                    stream=True  # IMPORTANTE: mantem a ligação aberta por mais tempo
+                    headers={'Content-Type': 'application/n-triples'},
+                    timeout=300 # 5 minutos de timeout para garantir tempo de escrita no disco
                 )
 
-            return response.status_code == 200
+            if r.status_code in (200, 204):
+                return True
+            log.error(f"GraphDB rejeitou o ficheiro. Código: {r.status_code}. Info: {r.text[:100]}")
+            return False
         except Exception as e:
-            log.error(f"Erro no upload chunked: {e}")
+            log.error(f"Erro na ligação de upload: {e}")
             return False
 
     def _graphdb_triple_count(self) -> int:
-        try:
-            q = "SELECT (COUNT(*) AS ?c) WHERE { ?s ?p ?o }"
-            rows = self._sparql_via_http(q)
-            if rows:
-                val = rows[0].get("c", 0)
-                return int(val) if val else 0
-        except Exception:
-            pass
-        return 0
+        q = "SELECT (COUNT(*) AS ?c) WHERE { ?s ?p ?o }"
+        rows = self.execute_sparql(q)
+        return int(rows[0].get("c", 0)) if rows else 0
 
-    def _sparql_via_http(self, query_string: str) -> List[Dict[str, Any]]:
-        """Send a SPARQL SELECT to GraphDB and parse the JSON response."""
+    def execute_sparql(self, query_string: str) -> List[Dict[str, Any]]:
+        """Executa uma query SELECT e retorna uma lista de dicionários puros."""
+        if not self._use_graphdb:
+            return []
         try:
             r = requests.post(
                 self._sparql_url,
                 data={"query": query_string},
                 headers={"Accept": "application/sparql-results+json"},
-                timeout=30,
+                timeout=45,
             )
             if r.status_code != 200:
-                log.warning(
-                    f"GraphDB SPARQL returned {r.status_code}: {r.text[:200]}")
+                log.warning(f"Erro SPARQL ({r.status_code}): {r.text[:100]}")
                 return []
 
             data = r.json()
-            vars_ = data["results"]["bindings"] and data["head"]["vars"]
             rows = []
             for binding in data["results"]["bindings"]:
                 record = {}
                 for var in data["head"]["vars"]:
                     node = binding.get(var)
-                    if node is None:
-                        record[var] = None
-                    else:
-                        raw = node["value"]
+                    if node:
+                        val = node["value"]
                         typ = node.get("datatype", "")
-
+                        # Conversão simples de tipos básicos
                         if "integer" in typ or "int" in typ:
-                            try:
-                                raw = int(raw)
-                            except:
-                                pass
+                            try: val = int(val)
+                            except: pass
                         elif "decimal" in typ or "float" in typ or "double" in typ:
-                            try:
-                                raw = float(raw)
-                            except:
-                                pass
-                        record[var] = raw
+                            try: val = float(val)
+                            except: pass
+                        record[var] = val
+                    else:
+                        record[var] = None
                 rows.append(record)
             return rows
         except Exception as e:
-            log.warning(f"GraphDB HTTP SPARQL error: {e}")
+            log.warning(f"Exceção SPARQL: {e}")
             return []
 
-    # ── rdflib fallback ───────────────────────────────────────────────────────
-
-    def _load_rdflib(self, nt_path: Path) -> None:
-        from rdflib import ConjunctiveGraph, Namespace
-        from rdflib.namespace import OWL
-
-        BASE = Namespace("http://musickg.org/")
-        MUSIC = Namespace("http://musickg.org/ontology#")
-        SCHEMA = Namespace("http://schema.org/")
-
-        if not nt_path.exists():
-            log.error(f"NT file not found: {nt_path}")
-            self._graph = ConjunctiveGraph()
-            return
-
-        t0 = time.time()
-        log.info(f"rdflib: loading {nt_path} …")
-        g = ConjunctiveGraph()
-        g.parse(str(nt_path), format="nt")
-        g.bind("music",  MUSIC)
-        g.bind("schema", SCHEMA)
-        g.bind("base",   BASE)
-        self._graph = g
-        log.info(f"rdflib: loaded {len(g):,} triples in {time.time()-t0:.2f}s")
-
-    # ── execute_sparql (SELECT) ───────────────────────────────────────────────
-
-    def execute_sparql(self, query_string: str) -> List[Dict[str, Any]]:
-        """
-        Execute a SPARQL SELECT query.
-        Routes to GraphDB (HTTP) or rdflib depending on what's available.
-        Always returns a list of dicts — never raises.
-        """
-        t0 = time.time()
-        try:
-            if self._use_graphdb:
-                rows = self._sparql_via_http(query_string)
-            else:
-                rows = self._sparql_via_rdflib(query_string)
-        except Exception as e:
-            log.warning(f"SPARQL execute error: {e}")
-            rows = []
-        elapsed_ms = (time.time() - t0) * 1000
-        log.debug(f"SPARQL ({('GraphDB' if self._use_graphdb else 'rdflib')}) "
-                  f"→ {len(rows)} rows in {elapsed_ms:.1f}ms")
-        return rows
-
-    # ── execute_sparql_update (INSERT / DELETE / UPDATE) ─────────────────────
-
     def execute_sparql_update(self, update_string: str) -> bool:
-        """
-        Execute a SPARQL UPDATE operation (INSERT DATA, DELETE DATA,
-        DELETE/INSERT WHERE, CLEAR, DROP, …).
-
-        Returns True on success, False on failure.
-
-        GraphDB mode  → POST to /repositories/{repo}/statements
-        rdflib mode   → graph.update()
-
-        Example:
-            store.execute_sparql_update('''
-                PREFIX music: <http://musickg.org/ontology#>
-                INSERT DATA {
-                    <http://musickg.org/artist/New_Artist>
-                        a music:Artist ;
-                        music:artistName "New Artist" .
-                }
-            ''')
-        """
-        t0 = time.time()
-        try:
-            if self._use_graphdb:
-                ok = self._update_via_http(update_string)
-            else:
-                ok = self._update_via_rdflib(update_string)
-        except Exception as e:
-            log.warning(f"SPARQL UPDATE error: {e}")
+        """Executa comandos INSERT / DELETE / UPDATE."""
+        if not self._use_graphdb:
             return False
-        elapsed_ms = (time.time() - t0) * 1000
-        log.info(f"SPARQL UPDATE ({('GraphDB' if self._use_graphdb else 'rdflib')}) "
-                 f"→ {'OK' if ok else 'FAILED'} in {elapsed_ms:.1f}ms")
-        return ok
-
-    def _update_via_http(self, update_string: str) -> bool:
-        """Send SPARQL UPDATE to GraphDB /statements endpoint."""
         try:
             r = requests.post(
                 self._update_url,
@@ -349,59 +222,17 @@ class _RDFStore:
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
                 timeout=30,
             )
-            if r.status_code in (200, 204):
-                return True
-            log.warning(f"GraphDB UPDATE returned {r.status_code}: {r.text[:200]}")
-            return False
+            return r.status_code in (200, 204)
         except Exception as e:
-            log.warning(f"GraphDB UPDATE HTTP error: {e}")
+            log.warning(f"Exceção SPARQL UPDATE: {e}")
             return False
-
-    def _update_via_rdflib(self, update_string: str) -> bool:
-        """Execute SPARQL UPDATE against in-memory rdflib graph."""
-        if not self._graph:
-            return False
-        try:
-            self._graph.update(update_string)
-            return True
-        except Exception as e:
-            log.warning(f"rdflib UPDATE failed: {e}")
-            return False
-
-    def _sparql_via_rdflib(self, query_string: str) -> List[Dict[str, Any]]:
-        if not self._graph:
-            return []
-        try:
-            results = self._graph.query(query_string)
-        except Exception as e:
-            log.warning(f"rdflib SPARQL failed: {e}")
-            return []
-        rows = []
-        for row in results:
-            record = {}
-            for var in results.vars:
-                val = row[var]
-                if val is None:
-                    record[str(var)] = None
-                elif hasattr(val, "toPython"):
-                    record[str(var)] = val.toPython()
-                else:
-                    record[str(var)] = str(val)
-                    record[str(var)] = str(val)
-            rows.append(record)
-        return rows
-
-    # ── stats ─────────────────────────────────────────────────────────────────
 
     def get_stats(self) -> dict:
         stats = dict(self._stats)
-        stats["backend"] = "GraphDB" if self._use_graphdb else "rdflib"
-        if self._use_graphdb:
-            stats["graphdb_url"] = GRAPHDB_URL
-            stats["repository"] = GRAPHDB_REPOSITORY
-        elif self._graph:
-            stats["graph_triples_live"] = len(self._graph)
+        stats["backend"] = "GraphDB" if self._use_graphdb else "Desligado"
+        stats["graphdb_url"] = GRAPHDB_URL
+        stats["repository"] = GRAPHDB_REPOSITORY
         return stats
 
-# ── Module-level singleton ────────────────────────────────────────────────────
+# Singleton Instantiation
 store = _RDFStore()

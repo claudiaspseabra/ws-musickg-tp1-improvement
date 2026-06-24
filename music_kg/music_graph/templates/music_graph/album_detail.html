@@ -1,0 +1,68 @@
+{% extends 'music_graph/base.html' %}
+
+{% block title %}{{ album.name }} - MusicKG{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-6 py-10">
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="p-4 mb-6 text-sm rounded-lg bg-bg-hover text-accent font-bold border border-accent">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="flex items-center gap-6 mb-8 border-b border-border-col pb-8">
+        <div class="w-24 h-24 bg-bg-card rounded-lg flex items-center justify-center text-5xl border border-border-col">
+            💿
+        </div>
+        <div>
+            <h1 class="text-4xl font-extrabold text-text-primary mb-2">{{ album.name }}</h1>
+            <p class="text-text-secondary text-lg">
+                Por <a href="/artist/{{ album.artist_slug }}" class="text-accent hover:underline">{{ album.artist_name }}</a>
+                • {{ album.year }} • {{ album.track_count }} faixas
+            </p>
+        </div>
+    </div>
+
+    <div class="flex gap-4 mb-10 bg-bg-card p-6 rounded-xl border border-border-col">
+        <form action="{% url 'edit-album' album.slug %}" method="POST" class="flex-grow flex gap-3 items-end">
+            {% csrf_token %}
+            <div class="flex-grow">
+                <label class="text-xs text-text-muted mb-1 block">Nome do Álbum</label>
+                <input type="text" name="album_name" value="{{ album.name }}" required class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+            </div>
+            <div class="w-1/4">
+                <label class="text-xs text-text-muted mb-1 block">Ano</label>
+                <input type="number" name="release_year" value="{{ album.year }}" required class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+            </div>
+            <button type="submit" class="bg-accent text-black font-bold px-4 py-2 rounded hover:bg-accent-hover text-sm h-[38px]">
+                Salvar
+            </button>
+        </form>
+
+        <form action="{% url 'delete-album' album.slug %}" method="POST" onsubmit="return confirm('Tem a certeza que deseja eliminar este álbum do Grafo?');">
+            {% csrf_token %}
+            <input type="hidden" name="artist_slug" value="{{ album.artist_slug }}">
+            <button type="submit" class="bg-red-600 text-white font-bold px-4 py-2 rounded hover:bg-red-700 text-sm h-[38px] mt-[20px]">
+                🗑️ Apagar
+            </button>
+        </form>
+    </div>
+
+    <h2 class="text-2xl font-bold mb-4">🎵 Faixas</h2>
+    <div class="bg-bg-card rounded-xl border border-border-col divide-y divide-border-col">
+        {% for track in album.tracks %}
+        <div class="p-4 flex justify-between items-center hover:bg-bg-hover">
+            <div>
+                <p class="font-bold">{{ track.name }}</p>
+                <p class="text-xs text-text-muted">{{ track.genre|title }}</p>
+            </div>
+        </div>
+        {% empty %}
+        <div class="p-8 text-center text-text-muted">Nenhuma faixa encontrada neste álbum.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
