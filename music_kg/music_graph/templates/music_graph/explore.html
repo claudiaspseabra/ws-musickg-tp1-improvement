@@ -1,0 +1,80 @@
+{% extends 'music_graph/base.html' %}
+
+{% block title %}Explorador de Áudio - MusicKG{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-6 py-10">
+
+    <div class="mb-8">
+        <h1 class="text-4xl font-extrabold text-text-primary mb-2">🎛️ Explorador de Áudio</h1>
+        <p class="text-text-muted">Filtra o Knowledge Graph por métricas semânticas e sonoras usando SPARQL dinâmico.</p>
+    </div>
+
+    <form action="{% url 'explore' %}" method="GET" class="bg-bg-card p-6 rounded-xl border border-border-col mb-10 flex flex-col md:flex-row gap-6 items-end">
+
+        <div class="flex-grow w-full md:w-auto">
+            <label class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 block">Género Musical</label>
+            <select name="genre" class="w-full bg-bg-secondary border border-border-col rounded-lg px-4 py-3 text-white focus:outline-none focus:border-accent font-semibold cursor-pointer">
+                <option value="all" {% if selected_genre == 'all' %}selected{% endif %}>Todos os Géneros</option>
+                {% for g in genres %}
+                    <option value="{{ g|lower }}" {% if selected_genre|lower == g|lower %}selected{% endif %}>{{ g }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="w-full md:w-1/4">
+            <label class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 block">Energia Mínima: <span id="min_val" class="text-accent">{{ min_energy }}</span></label>
+            <input type="range" name="min_energy" min="0" max="1" step="0.01" value="{{ min_energy }}"
+                   oninput="document.getElementById('min_val').innerText = this.value"
+                   class="w-full accent-accent bg-bg-secondary h-2 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <div class="w-full md:w-1/4">
+            <label class="text-xs font-bold text-text-muted uppercase tracking-wider mb-2 block">Energia Máxima: <span id="max_val" class="text-accent">{{ max_energy }}</span></label>
+            <input type="range" name="max_energy" min="0" max="1" step="0.01" value="{{ max_energy }}"
+                   oninput="document.getElementById('max_val').innerText = this.value"
+                   class="w-full accent-accent bg-bg-secondary h-2 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <button type="submit" class="w-full md:w-auto bg-accent text-black font-bold px-8 py-3 rounded-lg hover:bg-accent-hover transition-colors shadow-[0_0_10px_rgba(30,215,96,0.2)] h-[48px]">
+            Aplicar Filtros
+        </button>
+    </form>
+
+    <div class="mb-6 flex justify-between items-center border-b border-border-col pb-4">
+        <h2 class="text-xl font-bold text-text-primary">Faixas Encontradas</h2>
+        <span class="text-sm font-mono text-accent bg-accent/10 px-3 py-1 rounded border border-accent/20">
+            {{ total_count }} resultados
+        </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {% for track in results %}
+            <div class="bg-bg-card p-4 rounded-xl border border-border-col hover:border-accent transition-colors flex justify-between items-center group">
+                <div>
+                    <h3 class="font-bold text-lg text-text-primary">{{ track.name }}</h3>
+                    <p class="text-sm text-text-muted">
+                        <a href="{% url 'artist-detail' track.artist_slug %}" class="hover:text-white hover:underline">{{ track.artist_name }}</a>
+                        • {{ track.genre }}
+                    </p>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                    <span class="text-accent font-bold text-sm bg-bg-secondary px-2 py-1 rounded">
+                        ⚡ {{ track.energy }}
+                    </span>
+                    <a href="{% url 'track-vibe' track.slug %}" class="text-xs text-text-muted hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                        ✨ Analisar Vibe
+                    </a>
+                </div>
+            </div>
+        {% empty %}
+            <div class="col-span-full text-center py-16 bg-bg-card rounded-xl border border-border-col">
+                <span class="text-4xl mb-4 block">🎛️</span>
+                <h3 class="text-xl font-bold text-white mb-2">Nenhum resultado</h3>
+                <p class="text-text-muted">Tenta alargar o intervalo de energia ou mudar o género.</p>
+            </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

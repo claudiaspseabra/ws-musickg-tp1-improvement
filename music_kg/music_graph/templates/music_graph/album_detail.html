@@ -107,6 +107,9 @@
                         <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
                         <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1 text-xs">Apagar</button>
                     </form>
+                    <a href="{% url 'track-vibe' track.slug %}" class="text-accent hover:text-accent-hover px-2 py-1 text-xs border border-transparent hover:border-accent rounded transition-all flex items-center gap-1" title="Analisar Vibe / Recomendações">
+                        ✨ Vibe
+                    </a>
                 </div>
             </div>
 

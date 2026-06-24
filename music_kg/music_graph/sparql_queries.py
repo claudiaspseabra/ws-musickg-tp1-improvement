@@ -632,3 +632,224 @@ def get_avg_energy_by_genre(limit: int = 10) -> list:
         {"label": str(r["genreLabel"]).title(), "avg": float(r["avgEnergy"])}
         for r in store.execute_sparql(query)
     ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. RECOMENDAÇÃO E SIMILARIDADE MATEMÁTICA
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_track_vibe_recommendations(track_slug: str) -> Optional[dict]:
+    """Procura músicas com a mesma 'vibe' (mesmo género e energia semelhante)."""
+    safe_slug = quote(track_slug, safe="")
+    t_uri = f"<http://musickg.org/track/{safe_slug}>"
+
+    # 1. Obter a informação da música base
+    info_q = _PREFIXES + f"""
+    SELECT ?name ?energy ?genreLabel ?artistName ?artistSlug WHERE {{
+        {t_uri} music:trackName ?name ;
+                music:energy ?energy ;
+                music:performedBy ?a_uri ;
+                music:inGenre ?g_uri .
+        ?g_uri music:label ?genreLabel .
+        ?a_uri music:artistName ?artistName .
+        BIND(REPLACE(STR(?a_uri), "^.*[/#]", "") AS ?artistSlug)
+    }} LIMIT 1
+    """
+    info_res = store.execute_sparql(info_q)
+    if not info_res:
+        return None
+
+    base_track = info_res[0]
+
+    # 2. Obter músicas semelhantes usando a função ABS() (Valor Absoluto)
+    sim_q = _PREFIXES + f"""
+    SELECT ?simTrackUri ?simTrackName ?simArtistName ?simArtistSlug ?simEnergy 
+           (ABS(?myEnergy - ?simEnergy) AS ?diff) 
+    WHERE {{
+        {t_uri} music:inGenre ?g_uri ;
+                music:energy ?myEnergy .
+
+        ?simTrackUri music:inGenre ?g_uri ;
+                     music:energy ?simEnergy ;
+                     music:trackName ?simTrackName ;
+                     music:performedBy ?simArtistUri .
+
+        ?simArtistUri music:artistName ?simArtistName .
+        BIND(REPLACE(STR(?simArtistUri), "^.*[/#]", "") AS ?simArtistSlug)
+
+        # Não recomendar a própria música
+        FILTER(?simTrackUri != {t_uri})
+
+        # A diferença de energia tem de ser <= 0.1 (10%)
+        FILTER(ABS(?myEnergy - ?simEnergy) <= 0.1)
+    }}
+    # Ordenar pelas mais parecidas (menor diferença primeiro)
+    ORDER BY ASC(?diff)
+    LIMIT 5
+    """
+
+    sim_tracks = [
+        {
+            "slug": _slug(str(r["simTrackUri"])),
+            "name": str(r["simTrackName"]),
+            "artist_name": str(r["simArtistName"]),
+            "artist_slug": str(r["simArtistSlug"]),
+            "energy": float(r["simEnergy"]),
+            "diff": round(float(r["diff"]), 3)
+        }
+        for r in store.execute_sparql(sim_q)
+    ]
+
+    return {
+        "slug": track_slug,
+        "name": str(base_track["name"]),
+        "energy": float(base_track["energy"]),
+        "genre": str(base_track["genreLabel"]).title(),
+        "artist_name": str(base_track["artistName"]),
+        "artist_slug": str(base_track["artistSlug"]),
+        "similar_tracks": sim_tracks
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. TIMELINE / DISCOGRAFIA (CRONOLOGIA)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_global_timeline() -> dict:
+    """Obtém todos os álbuns ordenados por ano e agrupados por década pelo SPARQL."""
+    query = _PREFIXES + """
+    SELECT ?albumUri ?albumName ?year ?artistName ?artistSlug
+           (FLOOR(?year / 10) * 10 AS ?decade)
+           (COUNT(?track) AS ?trackCount)
+    WHERE {
+        ?albumUri music:albumName ?albumName ;
+                  music:releaseYear ?year .
+        OPTIONAL {
+            ?track music:inAlbum ?albumUri ;
+                   music:performedBy ?a_uri .
+            ?a_uri music:artistName ?artistName .
+            BIND(REPLACE(STR(?a_uri), "^.*[/#]", "") AS ?artistSlug)
+        }
+    }
+    GROUP BY ?albumUri ?albumName ?year ?artistName ?artistSlug
+    ORDER BY DESC(?year) DESC(?trackCount)
+    """
+
+    # Vamos estruturar os dados num dicionário: { "2020": [album1, album2], "2010": [...] }
+    timeline = {}
+
+    for r in store.execute_sparql(query):
+        decade = str(int(r["decade"]))
+        if decade not in timeline:
+            timeline[decade] = []
+
+        timeline[decade].append({
+            "slug": _slug(str(r["albumUri"])),
+            "name": str(r["albumName"]),
+            "year": int(r["year"]),
+            "artist_name": str(r.get("artistName", "Vários Artistas")),
+            "artist_slug": str(r.get("artistSlug", "")),
+            "track_count": int(r["trackCount"])
+        })
+
+    return timeline
+
+
+def get_paginated_timeline(decade=None, letter=None, offset=0, limit=25) -> list[dict[str, str | int]]:
+    """Obtém álbuns filtrados por década, letra inicial e paginados."""
+
+    filters = ""
+    if decade:
+        filters += f"FILTER(FLOOR(?year / 10) * 10 = {decade})"
+    if letter:
+        # Filtra álbuns que começam com a letra escolhida
+        filters += f'FILTER(STRSTARTS(LCASE(?albumName), "{letter.lower()}"))'
+
+    query = _PREFIXES + f"""
+    SELECT ?albumUri ?albumName ?year ?artistName ?artistSlug ?trackCount
+    WHERE {{
+        ?albumUri music:albumName ?albumName ;
+                  music:releaseYear ?year .
+        {filters}
+        OPTIONAL {{
+            ?track music:inAlbum ?albumUri ;
+                   music:performedBy ?a_uri .
+            ?a_uri music:artistName ?artistName .
+            BIND(REPLACE(STR(?a_uri), "^.*[/#]", "") AS ?artistSlug)
+        }}
+    }}
+    GROUP BY ?albumUri ?albumName ?year ?artistName ?artistSlug
+    ORDER BY ?albumName
+    LIMIT {limit} OFFSET {offset}
+    """
+
+    return [
+        {
+            "slug": _slug(str(r["albumUri"])),
+            "name": str(r["albumName"]),
+            "year": int(r["year"]),
+            "artist_name": str(r.get("artistName", "Vários Artistas")),
+            "artist_slug": str(r.get("artistSlug", "")),
+        }
+        for r in store.execute_sparql(query)
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. EXPLORADOR DE ÁUDIO (FILTROS DINÂMICOS)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_all_genres() -> list:
+    """Obtém a lista de todos os géneros únicos presentes no grafo."""
+    query = _PREFIXES + """
+    SELECT DISTINCT ?genreLabel WHERE {
+        ?track music:inGenre ?g .
+        ?g music:label ?genreLabel .
+    } ORDER BY ?genreLabel
+    """
+    return [str(r["genreLabel"]).title() for r in store.execute_sparql(query)]
+
+
+def explore_audio(genre: str = "all", min_energy: float = 0.0, max_energy: float = 1.0, limit: int = 100) -> list:
+    """Pesquisa faixas aplicando filtros combinados de género e energia."""
+
+    # 1. Construir o filtro de género dinamicamente
+    genre_filter = ""
+    if genre and genre != "all":
+        safe_genre = genre.replace('"', '\\"')
+        genre_filter = f'FILTER(LCASE(STR(?genreLabel)) = LCASE("{safe_genre}"))'
+
+    # 2. Query com múltiplos filtros
+    query = _PREFIXES + f"""
+    SELECT DISTINCT ?trackUri ?trackName ?artistName ?artistSlug ?genreLabel ?energy 
+    WHERE {{
+        ?trackUri music:trackName ?trackName ;
+                  music:performedBy ?a_uri ;
+                  music:inGenre ?g_uri ;
+                  music:energy ?energy .
+
+        ?a_uri music:artistName ?artistName .
+        BIND(REPLACE(STR(?a_uri), "^.*[/#]", "") AS ?artistSlug)
+
+        ?g_uri music:label ?genreLabel .
+
+        {genre_filter}
+
+        # Filtro Matemático Combinado
+        FILTER(?energy >= {min_energy} && ?energy <= {max_energy})
+    }}
+    ORDER BY DESC(?energy)
+    LIMIT {limit}
+    """
+
+    return [
+        {
+            "slug": _slug(str(r["trackUri"])),
+            "name": str(r["trackName"]),
+            "artist_name": str(r["artistName"]),
+            "artist_slug": str(r["artistSlug"]),
+            "genre": str(r["genreLabel"]).title(),
+            "energy": float(r["energy"])
+        }
+        for r in store.execute_sparql(query)
+    ]

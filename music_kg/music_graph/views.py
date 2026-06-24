@@ -242,3 +242,64 @@ def export_artist_view(request, slug):
     response['Content-Disposition'] = f'attachment; filename="artist_{slug}.ttl"'
     return response
 
+def track_vibe_view(request, slug):
+    """Página dedicada à descoberta de músicas com a mesma Vibe."""
+    vibe_data = sq.get_track_vibe_recommendations(slug)
+    if not vibe_data:
+        raise Http404("Faixa não encontrada para análise de Vibe.")
+    return render(request, 'music_graph/track_vibe.html', {'track': vibe_data})
+
+
+def timeline_view(request):
+    # Parâmetros de filtro e paginação
+    decade = request.GET.get('decade')
+    letter = request.GET.get('letter')
+    offset = int(request.GET.get('offset', 0))
+    limit = 25
+
+    # Obter os dados paginados
+    albums = sq.get_paginated_timeline(decade=decade, letter=letter, offset=offset, limit=limit)
+
+    # Calcular o próximo offset para o botão "Carregar Mais"
+    next_offset = offset + limit if len(albums) == limit else None
+
+    context = {
+        'timeline': albums,
+        'decade': decade,
+        'letter': letter,
+        'offset': offset,
+        'next_offset': next_offset,
+        # Gerar letras e décadas para a UI
+        'alphabet': "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        'decades': [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
+    }
+    return render(request, 'music_graph/timeline.html', context)
+
+
+def explore_view(request):
+    """Página de Descoberta Avançada de Áudio."""
+    # Obter os filtros da barra de pesquisa
+    selected_genre = request.GET.get('genre', 'all')
+    min_e = request.GET.get('min_energy', '0.0')
+    max_e = request.GET.get('max_energy', '1.0')
+
+    # Garantir que os valores são números
+    try:
+        min_energy = float(min_e)
+        max_energy = float(max_e)
+    except ValueError:
+        min_energy, max_energy = 0.0, 1.0
+
+    # Fazer as queries
+    all_genres = sq.get_all_genres()
+    results = sq.explore_audio(selected_genre, min_energy, max_energy, limit=50)
+
+    context = {
+        'genres': all_genres,
+        'selected_genre': selected_genre,
+        'min_energy': min_energy,
+        'max_energy': max_energy,
+        'results': results,
+        'total_count': len(results)
+    }
+    return render(request, 'music_graph/explore.html', context)

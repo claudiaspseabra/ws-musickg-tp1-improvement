@@ -1,0 +1,56 @@
+{% extends 'music_graph/base.html' %}
+
+{% block title %}Análise de Vibe: {{ track.name }} - MusicKG{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-6 py-10">
+
+    <div class="mb-10 text-center">
+        <div class="w-24 h-24 bg-accent/20 text-accent mx-auto rounded-full flex items-center justify-center text-4xl mb-4 border-2 border-accent">
+            ✨
+        </div>
+        <h1 class="text-3xl font-extrabold text-text-primary mb-2">Análise de Vibe</h1>
+        <p class="text-text-muted text-lg">
+            Música Base: <strong class="text-white">{{ track.name }}</strong> de
+            <a href="{% url 'artist-detail' track.artist_slug %}" class="text-accent hover:underline">{{ track.artist_name }}</a>
+        </p>
+        <div class="mt-4 flex justify-center gap-4 text-sm font-bold">
+            <span class="bg-bg-card border border-border-col px-4 py-2 rounded-full">Género: {{ track.genre }}</span>
+            <span class="bg-bg-card border border-accent/50 text-accent px-4 py-2 rounded-full">Energia: {{ track.energy }}</span>
+        </div>
+    </div>
+
+    <h2 class="text-xl font-bold mb-6 text-text-primary border-b border-border-col pb-2">
+        Recomendações SPARQL (Mesmo Género & Energia Similar)
+    </h2>
+
+    <div class="flex flex-col gap-4">
+        {% for sim in track.similar_tracks %}
+            <div class="bg-bg-card p-4 rounded-xl border border-border-col flex items-center justify-between hover:border-accent transition-colors">
+                <div>
+                    <h3 class="font-bold text-lg text-text-primary">{{ sim.name }}</h3>
+                    <p class="text-sm text-text-muted">
+                        Por <a href="{% url 'artist-detail' sim.artist_slug %}" class="hover:text-white hover:underline">{{ sim.artist_name }}</a>
+                    </p>
+                </div>
+                <div class="text-right">
+                    <p class="text-accent font-bold text-sm">Energia: {{ sim.energy }}</p>
+                    <p class="text-xs text-text-muted mt-1">Diferença matemática: ±{{ sim.diff }}</p>
+                </div>
+            </div>
+        {% empty %}
+            <div class="text-center py-10 bg-bg-card rounded-xl border border-border-col">
+                <span class="text-4xl mb-4 block">🎧</span>
+                <h3 class="font-bold text-white mb-2">Sem combinações exatas</h3>
+                <p class="text-text-muted text-sm">O Knowledge Graph não encontrou músicas de {{ track.genre }} com energia assim tão próxima.</p>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-10 text-center">
+        <button onclick="history.back()" class="text-text-muted hover:text-white text-sm font-bold uppercase tracking-wider transition-colors">
+            ← Voltar
+        </button>
+    </div>
+</div>
+{% endblock %}

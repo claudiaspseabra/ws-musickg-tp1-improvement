@@ -9,6 +9,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('search/', views.search, name='search'),
     path('stats/', views.stats_view, name='stats'),
+    path('timeline/', views.timeline_view, name='timeline'),
+    path('explore/', views.explore_view, name='explore'),
 
     path('create-artist/', views.create_artist_view, name='create-artist'),
     path('artist/<str:slug>/', views.artist_detail, name='artist-detail'),
@@ -26,4 +28,5 @@ urlpatterns = [
 
     path('track/<str:slug>/delete/', views.delete_track_view, name='delete-track'),
     path('track/<str:slug>/edit/', views.edit_track_view, name='edit-track'),
+    path('track/<str:slug>/vibe/', views.track_vibe_view, name='track-vibe'),
 ]
