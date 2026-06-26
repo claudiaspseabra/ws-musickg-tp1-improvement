@@ -3,7 +3,7 @@
 {% block title %}{{ album.name }} - MusicKG{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-6 py-10">
+<div class="max-w-6xl mx-auto px-6 py-10">
 
     {% if messages %}
         {% for message in messages %}
@@ -54,7 +54,7 @@
     <div class="mb-10 bg-bg-card p-6 rounded-xl border border-border-col">
         <h2 class="text-xl font-bold mb-4 text-accent">➕ Add Tracks to this Album</h2>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-12">
             <form action="{% url 'add-existing-track' album.slug %}" method="POST" class="flex flex-col gap-3">
                 {% csrf_token %}
                 <label class="text-xs text-text-muted">Artist's Tracks (Singles or from other albums)</label>
@@ -74,7 +74,7 @@
                 {% endif %}
             </form>
 
-            <form action="{% url 'add-track' album.artist_slug %}" method="POST" class="flex flex-col gap-3 border-l border-border-col pl-8">
+            <form action="{% url 'add-track' album.artist_slug %}" method="POST" class="flex flex-col gap-3 border-l border-border-col pl-12">
                 {% csrf_token %}
                 <input type="hidden" name="album_slug" value="{{ album.slug }}">
                 <label class="text-xs text-text-muted">Create New Track</label>
@@ -102,6 +102,13 @@
                 </div>
 
                 <div class="flex gap-2">
+                    <form action="{% url 'remove-track-from-album' album.slug track.slug %}" method="POST">
+                        {% csrf_token %}
+                        <button type="submit" class="text-orange-400 hover:text-orange-500 px-2 py-1 text-xs border border-orange-400/30 hover:bg-orange-400/10 rounded transition-colors" title="Remove from album but keep in system">
+                            Unlink
+                        </button>
+                    </form>
+
                     <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete this track?');">
                         {% csrf_token %}
                         <input type="hidden" name="artist_slug" value="{{ artist.slug }}">

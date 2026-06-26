@@ -3,24 +3,51 @@
 {% block title %}{{ artist.name }} - MusicKG{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto px-6 py-10">
+<div id="top" class="relative max-w-5xl mx-auto px-6 py-10">
 
-    <div class="flex items-center gap-6 mb-10 border-b border-border-col pb-8">
-        <div class="w-32 h-32 bg-bg-card rounded-full flex items-center justify-center text-6xl border-4 border-accent">
+    <div class="hidden xl:block absolute top-10 bottom-10 -left-48 w-44">
+        <div class="sticky top-28 bg-bg-card p-5 rounded-xl border border-border-col shadow-lg shadow-black/20">
+            <a href="#top" class="text-sm font-extrabold text-accent hover:text-white uppercase tracking-wider mb-4 block truncate pb-3 border-b border-border-col transition-colors" title="{{ artist.name }}">
+                {{ artist.name }}
+            </a>
+            <nav class="flex flex-col gap-1.5 mt-2">
+                <a href="#tracks" class="text-sm text-text-primary hover:text-accent hover:bg-bg-secondary px-3 py-2 rounded-lg transition-all font-bold flex items-center gap-2">🎵 Tracks</a>
+                <a href="#add-track" class="text-xs text-text-muted hover:text-white hover:bg-bg-secondary px-3 py-1.5 rounded-lg transition-all ml-3 flex items-center gap-2 border-l-2 border-transparent hover:border-accent">↳ Add track</a>
+
+                <a href="#albums" class="text-sm text-text-primary hover:text-accent hover:bg-bg-secondary px-3 py-2 rounded-lg transition-all font-bold mt-2 flex items-center gap-2">💿 Albums</a>
+                <a href="#add-album" class="text-xs text-text-muted hover:text-white hover:bg-bg-secondary px-3 py-1.5 rounded-lg transition-all ml-3 flex items-center gap-2 border-l-2 border-transparent hover:border-accent">↳ Add album</a>
+
+                <a href="#related" class="text-sm text-text-primary hover:text-accent hover:bg-bg-secondary px-3 py-2 rounded-lg transition-all font-bold mt-2 flex items-center gap-2">🔗 Related</a>
+            </nav>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-8 mb-10 border-b border-border-col pb-8">
+        <div class="w-32 h-32 bg-bg-card rounded-full flex items-center justify-center text-6xl border-4 border-accent shadow-[0_0_20px_rgba(30,215,96,0.15)] shrink-0">
             🎤
         </div>
-        <div>
-            <h1 class="text-5xl font-extrabold text-text-primary mb-3">{{ artist.name }}</h1>
-            <div class="flex flex-wrap gap-2">
+        <div class="flex flex-col justify-center">
+            <h1 class="text-5xl font-extrabold text-text-primary mb-4">{{ artist.name }}</h1>
+
+            <div class="flex flex-wrap gap-2 mb-4">
                 {% for genre in artist.genres %}
-                    <span class="px-3 py-1 bg-bg-hover text-text-secondary rounded-full text-sm font-semibold uppercase tracking-wider">
+                    <span class="px-4 py-1.5 bg-bg-hover text-text-primary border border-border-col rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
                         {{ genre }}
                     </span>
                 {% empty %}
-                    <span class="text-text-muted text-sm">No genre associated</span>
+                    <span class="text-text-muted text-sm italic px-4 py-1.5 border border-dashed border-border-col rounded-full">No genre associated</span>
                 {% endfor %}
             </div>
-            <p class="text-xs text-text-muted mt-3 font-mono break-all">{{ artist.uri }}</p>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <a href="https://dbpedia.org/page/{{ artist.name|urlencode }}" target="_blank" class="inline-flex items-center gap-2 w-max px-3 py-1.5 text-xs font-bold transition-all">
+                    ↗ DBpedia <span class="text-[10px] opacity-70"></span>
+                </a>
+
+                <p class="text-xs text-text-muted font-mono break-all px-3 py-1.5 rounded-lg border border-border-col w-max">
+                    {{ artist.uri }}
+                </p>
+            </div>
         </div>
     </div>
 
@@ -53,7 +80,7 @@
             </div>
         </div>
 
-        <div class="lg:col-span-2 bg-bg-card p-6 rounded-xl border border-border-col">
+        <div id="add-track" class="lg:col-span-2 bg-bg-card p-6 rounded-xl border border-border-col scroll-mt-28">
             <h2 class="text-xl font-bold mb-4 text-accent">➕ Add New Track</h2>
             <form action="{% url 'add-track' artist.slug %}" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
                 {% csrf_token %}
@@ -79,56 +106,59 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
         <div class="lg:col-span-2">
-            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🎵 Tracks in Graph</h2>
-            <div class="bg-bg-card rounded-xl overflow-hidden border border-border-col">
-                {% for track in artist.top_tracks %}
-                <div class="flex flex-col p-4 border-b border-border-col hover:bg-bg-hover transition-colors last:border-0 group">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="font-bold text-text-primary">{{ track.name }}</p>
-                            <p class="text-xs text-text-muted">{{ track.genre|title }} • Energy: {{ track.energy }}</p>
+            <div id="tracks" class="scroll-mt-28">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🎵 Tracks in Graph</h2>
+                <div class="bg-bg-card rounded-xl overflow-hidden border border-border-col">
+                    {% for track in artist.top_tracks %}
+                    <div class="flex flex-col p-4 border-b border-border-col hover:bg-bg-hover transition-colors last:border-0 group">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-bold text-text-primary">{{ track.name }}</p>
+                                <p class="text-xs text-text-muted">{{ track.genre|title }} • Energy: {{ track.energy }}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Permanently delete this track?');">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
+                                    <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1 text-xs">Delete</button>
+                                </form>
+                                <a href="{% url 'track-vibe' track.slug %}" class="text-accent hover:text-accent-hover px-2 py-1 text-xs border border-transparent hover:border-accent rounded transition-all flex items-center gap-1" title="Analyze Vibe">
+                                    ✨ Vibe
+                                </a>
+                            </div>
                         </div>
-                        <div class="flex gap-2">
-                            <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Permanently delete this track?');">
+
+                        <details class="mt-2 text-sm text-text-muted">
+                            <summary class="cursor-pointer hover:text-accent font-bold mb-2">✏️ Edit Track</summary>
+                            <form action="{% url 'edit-track' track.slug %}" method="POST" class="flex gap-3 items-end p-3 bg-bg-secondary rounded border border-border-col">
                                 {% csrf_token %}
                                 <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
-                                <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1 text-xs">Delete</button>
+                                <div class="flex-grow">
+                                    <label class="text-xs block mb-1">Name</label>
+                                    <input type="text" name="track_name" value="{{ track.name }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
+                                </div>
+                                <div class="w-1/3">
+                                    <label class="text-xs block mb-1">Genre(s)</label>
+                                    <input type="text" name="genre_name" value="{{ track.genre }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
+                                </div>
+                                <div class="w-1/4">
+                                    <label class="text-xs block mb-1">Energy</label>
+                                    <input type="number" step="0.001" min="0" max="1" name="energy" value="{{ track.energy }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
+                                </div>
+                                <button type="submit" class="bg-accent text-black font-bold px-3 py-1 rounded hover:bg-accent-hover h-[30px]">Save</button>
                             </form>
-                            <a href="{% url 'track-vibe' track.slug %}" class="text-accent hover:text-accent-hover px-2 py-1 text-xs border border-transparent hover:border-accent rounded transition-all flex items-center gap-1" title="Analyze Vibe">
-                                ✨ Vibe
-                            </a>
-                        </div>
+                        </details>
                     </div>
-
-                    <details class="mt-2 text-sm text-text-muted">
-                        <summary class="cursor-pointer hover:text-accent font-bold mb-2">✏️ Edit Track</summary>
-                        <form action="{% url 'edit-track' track.slug %}" method="POST" class="flex gap-3 items-end p-3 bg-bg-secondary rounded border border-border-col">
-                            {% csrf_token %}
-                            <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
-                            <div class="flex-grow">
-                                <label class="text-xs block mb-1">Name</label>
-                                <input type="text" name="track_name" value="{{ track.name }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
-                            </div>
-                            <div class="w-1/3">
-                                <label class="text-xs block mb-1">Genre(s)</label>
-                                <input type="text" name="genre_name" value="{{ track.genre }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
-                            </div>
-                            <div class="w-1/4">
-                                <label class="text-xs block mb-1">Energy</label>
-                                <input type="number" step="0.001" min="0" max="1" name="energy" value="{{ track.energy }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
-                            </div>
-                            <button type="submit" class="bg-accent text-black font-bold px-3 py-1 rounded hover:bg-accent-hover h-[30px]">Save</button>
-                        </form>
-                    </details>
+                    {% empty %}
+                    <div class="p-8 text-center text-text-muted">No tracks found for this artist.</div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="p-8 text-center text-text-muted">No tracks found for this artist.</div>
-                {% endfor %}
             </div>
 
-            <div class="mt-10">
+            <div id="albums" class="mt-10 scroll-mt-28">
                 <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">💿 Albums</h2>
-                <div class="mb-6 p-4 bg-bg-secondary rounded-xl border border-accent/30 border-dashed">
+
+                <div id="add-album" class="mb-6 p-4 bg-bg-secondary rounded-xl border border-accent/30 border-dashed scroll-mt-28">
                     <h3 class="text-sm font-bold mb-3 text-accent">➕ Create New Album</h3>
                     <form action="{% url 'create-album' artist.slug %}" method="POST" class="flex flex-col sm:flex-row gap-3 items-end">
                         {% csrf_token %}
@@ -167,17 +197,19 @@
         </div>
 
         <div>
-            <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🔗 Related</h2>
-            <p class="text-sm text-text-muted mb-4">Artists connected via shared musical genres.</p>
-            <div class="flex flex-col gap-3">
-                {% for sim in artist.similar_artists %}
-                <a href="/artist/{{ sim.slug }}" class="flex items-center gap-3 p-3 rounded-lg bg-bg-card hover:bg-bg-hover border border-transparent hover:border-accent transition-colors">
-                    <div class="w-10 h-10 bg-bg-secondary rounded-full flex items-center justify-center text-lg">🎸</div>
-                    <div><p class="font-bold text-sm text-text-primary">{{ sim.name }}</p></div>
-                </a>
-                {% empty %}
-                <div class="p-6 text-center text-text-muted bg-bg-card rounded-xl">No connections in graph.</div>
-                {% endfor %}
+            <div id="related" class="scroll-mt-28">
+                <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">🔗 Related</h2>
+                <p class="text-sm text-text-muted mb-4">Artists connected via shared musical genres.</p>
+                <div class="flex flex-col gap-3">
+                    {% for sim in artist.similar_artists %}
+                    <a href="/artist/{{ sim.slug }}" class="flex items-center gap-3 p-3 rounded-lg bg-bg-card hover:bg-bg-hover border border-transparent hover:border-accent transition-colors">
+                        <div class="w-10 h-10 bg-bg-secondary rounded-full flex items-center justify-center text-lg">🎸</div>
+                        <div><p class="font-bold text-sm text-text-primary">{{ sim.name }}</p></div>
+                    </a>
+                    {% empty %}
+                    <div class="p-6 text-center text-text-muted bg-bg-card rounded-xl">No connections in graph.</div>
+                    {% endfor %}
+                </div>
             </div>
         </div>
     </div>

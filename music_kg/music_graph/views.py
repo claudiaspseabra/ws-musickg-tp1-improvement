@@ -2,7 +2,7 @@
 music_graph/views.py
 """
 from django.shortcuts import render, redirect
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.contrib import messages
 
 from music_graph import sparql_queries as sq
@@ -246,7 +246,7 @@ def remove_track_from_album_view(request, album_slug, track_slug):
     """Handles POST requests to delete the relationship between a track and an album."""
     if request.method == "POST":
         if sq.remove_track_from_album(track_slug, album_slug):
-            messages.success(request, "Track removed from album. It remains in the system as a Single.")
+            messages.success(request, "Track removed from album. It remains in the system as a song.")
         else:
             messages.error(request, "Error removing track from album.")
     return redirect('album-detail', slug=album_slug)
@@ -284,6 +284,12 @@ def timeline_view(request):
     albums = sq.get_paginated_timeline(decade=decade, letter=letter, offset=offset, limit=limit)
 
     next_offset = offset + limit if len(albums) == limit else None
+
+    if request.headers.get('Accept') == 'application/json':
+        return JsonResponse({
+            'albums': albums,
+            'next_offset': next_offset
+        })
 
     context = {
         'timeline': albums,

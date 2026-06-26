@@ -734,20 +734,30 @@ def get_global_timeline() -> Dict[str, List[Dict]]:
 
     return timeline
 
-def get_paginated_timeline(decade=None, letter=None, offset=0, limit=25) -> list[dict[str, str | int]]:
-    """Obtains albums filtered by decade and initial."""
-    filters = ""
-    if decade:
-        filters += f"FILTER(FLOOR(?year / 10) * 10 = {decade})"
-    if letter:
-        filters += f'FILTER(STRSTARTS(LCASE(?albumName), "{letter.lower()}"))'
 
+def get_paginated_timeline(decade: str = None, letter: str = None, offset: int = 0, limit: int = 25) -> list:
+    """Fetches paginated albums filtered by decade and starting letter."""
+    filters = ""
+
+    # 1. Sanitização robusta para evitar que o Django passe "None" ou "" como string para o SPARQL
+    if decade and str(decade).lower() not in ['none', 'all', '']:
+        filters += f"FILTER(FLOOR(?year / 10) * 10 = {decade}) \n"
+
+    # 2. Sanitização robusta para a letra
+    if letter and str(letter).lower() not in ['none', 'all', '']:
+        safe_letter = str(letter).lower().replace('"', '')
+        # STR() garante que o LCASE não falha se o nome do álbum for um Literal tipificado
+        filters += f'FILTER(STRSTARTS(LCASE(STR(?albumName)), "{safe_letter}")) \n'
+
+    # 3. Query SPARQL 1.1 válida (com o COUNT explícito para respeitar o GROUP BY)
     query = _PREFIXES + f"""
-    SELECT ?albumUri ?albumName ?year ?artistName ?artistSlug ?trackCount
+    SELECT ?albumUri ?albumName ?year ?artistName ?artistSlug (COUNT(?track) AS ?trackCount)
     WHERE {{
         ?albumUri music:albumName ?albumName ;
                   music:releaseYear ?year .
+
         {filters}
+
         OPTIONAL {{
             ?track music:inAlbum ?albumUri ;
                    music:performedBy ?a_uri .
@@ -765,8 +775,9 @@ def get_paginated_timeline(decade=None, letter=None, offset=0, limit=25) -> list
             "slug": _slug(str(r["albumUri"])),
             "name": str(r["albumName"]),
             "year": int(r["year"]),
-            "artist_name": str(r.get("artistName", "Vários Artistas")),
+            "artist_name": str(r.get("artistName", "Various Artists")),
             "artist_slug": str(r.get("artistSlug", "")),
+            "track_count": int(r.get("trackCount", 0))
         }
         for r in store.execute_sparql(query)
     ]
