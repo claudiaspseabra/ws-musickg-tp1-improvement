@@ -1,24 +1,28 @@
 {% extends 'music_graph/base.html' %}
 
+{% block title %}Timeline - MusicKG{% endblock %}
+
 {% block content %}
 <div class="max-w-6xl mx-auto px-6 py-10">
 
     <div class="bg-bg-card p-6 rounded-xl border border-border-col mb-8">
+
         <div class="mb-4">
-            <h3 class="text-xs font-bold text-text-muted uppercase mb-2">Filtrar por Década</h3>
+            <h3 class="text-xs font-bold text-text-muted uppercase mb-2">Filter by Decade</h3>
             <div class="flex flex-wrap gap-2">
-                <a href="?letter={{ letter }}" class="px-3 py-1 text-sm rounded {% if not decade %}bg-accent text-black{% else %}bg-bg-hover text-white{% endif %}">Todas</a>
+                <a href="?letter={{ letter|default:'' }}" class="px-3 py-1 text-sm rounded {% if not decade %}bg-accent text-black{% else %}bg-bg-hover text-white{% endif %}">All</a>
                 {% for d in decades %}
-                    <a href="?decade={{ d }}&letter={{ letter }}" class="px-3 py-1 text-sm rounded {% if decade|add:"0" == d %}bg-accent text-black{% else %}bg-bg-hover text-white{% endif %}">{{ d }}s</a>
+                    <a href="?decade={{ d }}&letter={{ letter|default:'' }}" class="px-3 py-1 text-sm rounded {% if decade|add:"0" == d %}bg-accent text-black{% else %}bg-bg-hover text-white{% endif %}">{{ d }}s</a>
                 {% endfor %}
             </div>
         </div>
+
         <div>
-            <h3 class="text-xs font-bold text-text-muted uppercase mb-2">Filtrar por Letra</h3>
+            <h3 class="text-xs font-bold text-text-muted uppercase mb-2">Filter by Letter</h3>
             <div class="flex flex-wrap gap-1">
                 <a href="?decade={{ decade|default:'' }}"
                    class="px-3 py-1 text-sm rounded {% if not letter %}bg-accent text-black{% else %}bg-bg-hover text-white{% endif %}">
-                   Todos
+                   ALL
                 </a>
                 {% for l in alphabet %}
                     <a href="?decade={{ decade|default:'' }}&letter={{ l }}"
@@ -32,12 +36,12 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {% for album in timeline %}
-            <div class="bg-bg-card p-4 rounded-xl border border-border-col hover:border-accent">
+            <div class="bg-bg-card p-4 rounded-xl border border-border-col hover:border-accent transition-colors">
                 <h3 class="font-bold text-text-primary">{{ album.name }}</h3>
                 <p class="text-sm text-text-muted">{{ album.artist_name }} ({{ album.year }})</p>
             </div>
         {% empty %}
-            <p class="text-text-muted">Nenhum álbum encontrado com estes filtros.</p>
+            <p class="text-text-muted italic">No albums found matching these filters.</p>
         {% endfor %}
     </div>
 
@@ -45,7 +49,7 @@
         <div class="text-center">
             <a href="?decade={{ decade|default:'' }}&letter={{ letter|default:'' }}&offset={{ next_offset }}"
                class="inline-block bg-accent text-black font-bold px-8 py-3 rounded-lg hover:bg-accent-hover transition-colors">
-                Carregar mais 25
+                Load more 25
             </a>
         </div>
     {% endif %}

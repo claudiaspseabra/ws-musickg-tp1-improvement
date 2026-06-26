@@ -1,6 +1,6 @@
 """
 music_graph/urls.py
-Rotas para o frontend Django SSR (TP1)
+Routing configuration for the Django SSR Frontend
 """
 from django.urls import path
 from music_graph import views
@@ -16,6 +16,7 @@ urlpatterns = [
     path('artist/<str:slug>/', views.artist_detail, name='artist-detail'),
     path('artist/<str:slug>/add-track/', views.add_track_view, name='add-track'),
     path('artist/<str:slug>/delete/', views.delete_artist_view, name='delete-artist'),
+    path('artist/<str:artist_slug>/create-album/', views.create_album_view, name='create-album'),
 
     path('artist/<str:slug>/raw/', views.raw_artist_view, name='raw-artist'),
     path('artist/<str:slug>/export/', views.export_artist_view, name='export-artist'),

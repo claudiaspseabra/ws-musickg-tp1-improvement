@@ -20,8 +20,8 @@
         <div>
             <h1 class="text-4xl font-extrabold text-text-primary mb-2">{{ album.name }}</h1>
             <p class="text-text-secondary text-lg">
-                Por <a href="/artist/{{ album.artist_slug }}" class="text-accent hover:underline">{{ album.artist_name }}</a>
-                • {{ album.year }} • {{ album.track_count }} faixas
+                By <a href="/artist/{{ album.artist_slug }}" class="text-accent hover:underline">{{ album.artist_name }}</a>
+                • {{ album.year }} • {{ album.track_count }} tracks
             </p>
         </div>
     </div>
@@ -30,115 +30,115 @@
         <form action="{% url 'edit-album' album.slug %}" method="POST" class="flex-grow flex gap-3 items-end">
             {% csrf_token %}
             <div class="flex-grow">
-                <label class="text-xs text-text-muted mb-1 block">Nome do Álbum</label>
+                <label class="text-xs text-text-muted mb-1 block">Album Name</label>
                 <input type="text" name="album_name" value="{{ album.name }}" required class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
             </div>
             <div class="w-1/4">
-                <label class="text-xs text-text-muted mb-1 block">Ano</label>
+                <label class="text-xs text-text-muted mb-1 block">Year</label>
                 <input type="number" name="release_year" value="{{ album.year }}" required class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
             </div>
             <button type="submit" class="bg-accent text-black font-bold px-4 py-2 rounded hover:bg-accent-hover text-sm h-[38px]">
-                Salvar
+                Save
             </button>
         </form>
 
-        <form action="{% url 'delete-album' album.slug %}" method="POST" onsubmit="return confirm('Tem a certeza que deseja eliminar este álbum do Grafo?');">
+        <form action="{% url 'delete-album' album.slug %}" method="POST" onsubmit="return confirm('Are you sure you want to delete this album from the Graph?');">
             {% csrf_token %}
             <input type="hidden" name="artist_slug" value="{{ album.artist_slug }}">
             <button type="submit" class="bg-red-600 text-white font-bold px-4 py-2 rounded hover:bg-red-700 text-sm h-[38px] mt-[20px]">
-                🗑️ Apagar
+                🗑️ Delete
             </button>
         </form>
     </div>
 
     <div class="mb-10 bg-bg-card p-6 rounded-xl border border-border-col">
-        <h2 class="text-xl font-bold mb-4 text-accent">➕ Adicionar Faixas a este Álbum</h2>
+        <h2 class="text-xl font-bold mb-4 text-accent">➕ Add Tracks to this Album</h2>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <form action="{% url 'add-existing-track' album.slug %}" method="POST" class="flex flex-col gap-3">
                 {% csrf_token %}
-                <label class="text-xs text-text-muted">Faixas do Artista (Singles ou Noutros Álbuns)</label>
+                <label class="text-xs text-text-muted">Artist's Tracks (Singles or from other albums)</label>
                 <div class="flex gap-2">
                     <select name="track_slug" required class="flex-grow bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white focus:outline-none">
-                        <option value="" disabled selected>-- Selecione uma música --</option>
+                        <option value="" disabled selected>-- Select a track --</option>
                         {% for t in album.other_tracks %}
                             <option value="{{ t.slug }}">{{ t.name }}</option>
                         {% endfor %}
                     </select>
                     <button type="submit" class="bg-bg-hover text-white border border-border-col font-bold px-4 rounded hover:bg-accent hover:text-black hover:border-transparent text-sm transition-colors">
-                        Vincular
+                        Link
                     </button>
                 </div>
                 {% if not album.other_tracks %}
-                    <p class="text-xs text-red-400 mt-1">Este artista não tem outras faixas soltas.</p>
+                    <p class="text-xs text-red-400 mt-1">No unassigned tracks found for this artist.</p>
                 {% endif %}
             </form>
 
             <form action="{% url 'add-track' album.artist_slug %}" method="POST" class="flex flex-col gap-3 border-l border-border-col pl-8">
                 {% csrf_token %}
                 <input type="hidden" name="album_slug" value="{{ album.slug }}">
-                <label class="text-xs text-text-muted">Criar Música Nova</label>
+                <label class="text-xs text-text-muted">Create New Track</label>
 
-                <input type="text" name="track_name" required placeholder="Nome da Música" class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+                <input type="text" name="track_name" required placeholder="Track Name" class="w-full bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
                 <div class="flex gap-2">
-                    <input type="text" name="genre_name" required placeholder="Género (ex: Pop)" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
-                    <input type="number" step="0.001" min="0" max="1" name="energy" required value="0.8" title="Energia" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+                    <input type="text" name="genre_name" required placeholder="Genre (e.g. Pop)" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+                    <input type="number" step="0.001" min="0" max="1" name="energy" required value="0.8" title="Energy" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
                 </div>
                 <button type="submit" class="bg-accent text-black font-bold px-4 py-2 rounded hover:bg-accent-hover text-sm">
-                    + Criar e Adicionar
+                    + Create & Add
                 </button>
             </form>
         </div>
     </div>
 
-    <h2 class="text-2xl font-bold mb-4">🎵 Faixas no Álbum ({{ album.track_count }})</h2>
+    <h2 class="text-2xl font-bold mb-4">🎵 Tracks in Album ({{ album.track_count }})</h2>
     <div class="bg-bg-card rounded-xl border border-border-col divide-y divide-border-col">
         {% for track in album.tracks %}
         <div class="flex flex-col p-4 border-b border-border-col hover:bg-bg-hover transition-colors last:border-0 group">
             <div class="flex items-center justify-between">
                 <div>
                     <p class="font-bold text-text-primary">{{ track.name }}</p>
-                    <p class="text-xs text-text-muted">{{ track.genre|title }} • Energia: {{ track.energy }}</p>
+                    <p class="text-xs text-text-muted">{{ track.genre|title }} • Energy: {{ track.energy }}</p>
                 </div>
 
                 <div class="flex gap-2">
-                    <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Deseja apagar a faixa permanentemente?');">
+                    <form action="{% url 'delete-track' track.slug %}" method="POST" onsubmit="return confirm('Are you sure you want to permanently delete this track?');">
                         {% csrf_token %}
                         <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
-                        <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1 text-xs">Apagar</button>
+                        <button type="submit" class="text-red-400 hover:text-red-600 px-2 py-1 text-xs">Delete</button>
                     </form>
-                    <a href="{% url 'track-vibe' track.slug %}" class="text-accent hover:text-accent-hover px-2 py-1 text-xs border border-transparent hover:border-accent rounded transition-all flex items-center gap-1" title="Analisar Vibe / Recomendações">
+                    <a href="{% url 'track-vibe' track.slug %}" class="text-accent hover:text-accent-hover px-2 py-1 text-xs border border-transparent hover:border-accent rounded transition-all flex items-center gap-1" title="Analyze Vibe / Recommendations">
                         ✨ Vibe
                     </a>
                 </div>
             </div>
 
             <details class="mt-2 text-sm text-text-muted">
-                <summary class="cursor-pointer hover:text-accent font-bold mb-2">✏️ Editar Música</summary>
+                <summary class="cursor-pointer hover:text-accent font-bold mb-2">✏️ Edit Track</summary>
                 <form action="{% url 'edit-track' track.slug %}" method="POST" class="flex gap-3 items-end p-3 bg-bg-secondary rounded border border-border-col">
                     {% csrf_token %}
                     <input type="hidden" name="artist_slug" value="{{ artist.slug }}">
 
                     <div class="flex-grow">
-                        <label class="text-xs block mb-1">Nome</label>
+                        <label class="text-xs block mb-1">Name</label>
                         <input type="text" name="track_name" value="{{ track.name }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
                     </div>
                     <div class="w-1/3">
-                        <label class="text-xs block mb-1">Género(s)</label>
+                        <label class="text-xs block mb-1">Genre(s)</label>
                         <input type="text" name="genre_name" value="{{ track.genre }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
                     </div>
                     <div class="w-1/4">
-                        <label class="text-xs block mb-1">Energia</label>
+                        <label class="text-xs block mb-1">Energy</label>
                         <input type="number" step="0.001" min="0" max="1" name="energy" value="{{ track.energy }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white">
                     </div>
                     <button type="submit" class="bg-accent text-black font-bold px-3 py-1 rounded hover:bg-accent-hover h-[30px]">
-                        Salvar
+                        Save
                     </button>
                 </form>
             </details>
         </div>
         {% empty %}
-        <div class="p-8 text-center text-text-muted">Nenhuma faixa encontrada neste álbum.</div>
+        <div class="p-8 text-center text-text-muted">No tracks found in this album.</div>
         {% endfor %}
     </div>
 </div>

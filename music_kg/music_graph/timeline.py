@@ -1,7 +1,7 @@
 """
-templates/timeline.py
+music_graph/timeline.py
 
-Timeline and genre-evolution queries.
+Advanced Analytical Queries for Temporal Discovery.
 """
 import logging
 from typing import List, Dict
@@ -10,13 +10,11 @@ from music_graph.sparql_queries import _PREFIXES, _round
 
 log = logging.getLogger(__name__)
 
-
 def get_timeline_data(start_year: int = 1950, end_year: int = 2024) -> List[Dict]:
     """
-    Per-year aggregate: track count, artist count, top genre,
-    avg audio features, top tracks by popularity.
+    Retrieves global music aggregates per year, including track/artist counts, dominant genres, average audio metrics, and top tracks.
     """
-    # Step 1 — per-year aggregates
+    # 1. per-year aggregate metrics
     agg_q = _PREFIXES + f"""
     SELECT ?year
            (COUNT(DISTINCT ?track)  AS ?trackCount)
@@ -24,13 +22,13 @@ def get_timeline_data(start_year: int = 1950, end_year: int = 2024) -> List[Dict
            (AVG(?energy)            AS ?avgEnergy)
            (AVG(?dance)             AS ?avgDance)
     WHERE {{
-        ?album music:releaseYear ?year ;
-               music:hasTrack ?track .
-        ?track music:performedBy ?artist .
+        ?track music:inAlbum ?album ;
+               music:performedBy ?artist .
+        ?album music:releaseYear ?year .
+        
         OPTIONAL {{
-            ?track music:hasAudioFeatures ?af .
-            ?af music:energy ?energy ;
-                music:danceability ?dance .
+            ?track music:energy ?energy ;
+                   music:danceability ?dance .
         }}
         FILTER (?year >= {start_year} && ?year <= {end_year})
     }}
@@ -39,13 +37,14 @@ def get_timeline_data(start_year: int = 1950, end_year: int = 2024) -> List[Dict
     """
     agg_rows = store.execute_sparql(agg_q)
 
-    # Step 2 — top genre per year
+    # 2. determine the most prevalent genre per year
     genre_q = _PREFIXES + f"""
     SELECT ?year ?genreLabel (COUNT(?track) AS ?cnt) WHERE {{
-        ?album music:releaseYear ?year ;
-               music:hasTrack ?track .
-        ?track music:inGenre ?g .
+        ?track music:inAlbum ?album ;
+               music:inGenre ?g .
+        ?album music:releaseYear ?year .
         ?g rdfs:label ?genreLabel .
+        
         FILTER (?year >= {start_year} && ?year <= {end_year})
     }}
     GROUP BY ?year ?genreLabel
@@ -53,21 +52,22 @@ def get_timeline_data(start_year: int = 1950, end_year: int = 2024) -> List[Dict
     """
     genre_rows = store.execute_sparql(genre_q)
 
-    # Build top-genre map (first result per year is highest count due to ORDER BY)
+    # build top-genre map
     top_genre_map: Dict[int, str] = {}
     for r in genre_rows:
         y = int(r["year"]) if r.get("year") is not None else None
         if y and y not in top_genre_map:
-            top_genre_map[y] = str(r["genreLabel"])
+            top_genre_map[y] = str(r["genreLabel"]).title()
 
-    # Step 3 — top 3 tracks per year
+    # 3. extract the top 3 most popular tracks per year
     top_tracks_q = _PREFIXES + f"""
     SELECT ?year ?trackName ?artistName ?popularity WHERE {{
-        ?album music:releaseYear ?year ;
-               music:hasTrack ?track .
-        ?track music:trackName ?trackName ;
+        ?track music:inAlbum ?album ;
+               music:trackName ?trackName ;
                music:performedBy ?artist .
+        ?album music:releaseYear ?year .
         ?artist music:artistName ?artistName .
+        
         OPTIONAL {{ ?track music:popularity ?popularity }}
         FILTER (?year >= {start_year} && ?year <= {end_year})
     }}
@@ -85,33 +85,31 @@ def get_timeline_data(start_year: int = 1950, end_year: int = 2024) -> List[Dict
             lst.append({
                 "name":       str(r["trackName"]),
                 "artist":     str(r["artistName"]),
-                "popularity": r.get("popularity", 0),
+                "popularity": int(float(r.get("popularity", 0))),
             })
 
-    # Assemble result
+    # 4. assemble the final unified data structure
     timeline = []
     for r in agg_rows:
         y = int(r["year"]) if r.get("year") is not None else None
         if y is None:
             continue
         timeline.append({
-            "year":          y,
-            "track_count":   r.get("trackCount", 0),
-            "artist_count":  r.get("artistCount", 0),
-            "top_genre":     top_genre_map.get(y),
-            "avg_energy":    _round(r.get("avgEnergy")),
+            "year":             y,
+            "track_count":      int(r.get("trackCount", 0)),
+            "artist_count":     int(r.get("artistCount", 0)),
+            "top_genre":        top_genre_map.get(y, "Unknown"),
+            "avg_energy":       _round(r.get("avgEnergy")),
             "avg_danceability": _round(r.get("avgDance")),
-            "top_tracks":    top_tracks_map.get(y, []),
+            "top_tracks":       top_tracks_map.get(y, []),
         })
     return timeline
 
-
 def get_genre_evolution(genre_name: str) -> List[Dict]:
     """
-    How a genre's audio features changed by decade.
-    Returns [{decade, avg_energy, avg_danceability, avg_valence, track_count}]
+    Analyzes how a specific genre's audio signature (energy, danceability) evolved across decades.
     """
-    safe_genre = genre_name.replace('"', '\\"')
+    safe_genre = genre_name.replace('"', '\\"').lower()
 
     query = _PREFIXES + f"""
     SELECT ?decade
@@ -120,18 +118,20 @@ def get_genre_evolution(genre_name: str) -> List[Dict]:
            (AVG(?dance)             AS ?avgDance)
            (AVG(?valence)           AS ?avgValence)
     WHERE {{
-        ?g a music:Genre ;
-           rdfs:label "{safe_genre}" .
-        ?track music:inGenre ?g .
-        ?album music:hasTrack ?track ;
-               music:releaseYear ?year .
+        ?track music:inGenre ?g ;
+               music:inAlbum ?album .
+        ?g rdfs:label ?genreLabel .
+        ?album music:releaseYear ?year .
+        
         BIND (FLOOR(?year / 10) * 10 AS ?decade)
+        
         OPTIONAL {{
-            ?track music:hasAudioFeatures ?af .
-            ?af music:energy ?energy ;
-                music:danceability ?dance ;
-                music:valence ?valence .
+            ?track music:energy ?energy ;
+                   music:danceability ?dance ;
+                   music:valence ?valence .
         }}
+        
+        FILTER(LCASE(STR(?genreLabel)) = "{safe_genre}")
         FILTER (?year >= 1950 && ?year <= 2024)
     }}
     GROUP BY ?decade
@@ -141,11 +141,11 @@ def get_genre_evolution(genre_name: str) -> List[Dict]:
     rows = store.execute_sparql(query)
     return [
         {
-            "decade":          int(r["decade"]) if r.get("decade") is not None else None,
-            "track_count":     r.get("trackCount", 0),
-            "avg_energy":      _round(r.get("avgEnergy")),
+            "decade":           int(r["decade"]) if r.get("decade") is not None else None,
+            "track_count":      int(r.get("trackCount", 0)),
+            "avg_energy":       _round(r.get("avgEnergy")),
             "avg_danceability": _round(r.get("avgDance")),
-            "avg_valence":     _round(r.get("avgValence")),
+            "avg_valence":      _round(r.get("avgValence")),
         }
         for r in rows
         if r.get("decade") is not None

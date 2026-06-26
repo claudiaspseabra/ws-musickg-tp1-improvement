@@ -1,8 +1,7 @@
 """
 music_graph/rdf_store.py
 
-Camada de Persistência RDF (GraphDB HTTP)
-Otimizada para o TP1: Factos Puros, Auto-Configuração e Upload Robusto em Streaming.
+RDF Persistence Layer (GraphDB HTTP)
 """
 import json
 import logging
@@ -13,13 +12,13 @@ from typing import Optional, Dict, Any, List
 
 from rdflib import Namespace
 
-# Namespaces (Apenas dados, sem ontologia formal)
+# Namespaces
 BASE = Namespace("http://musickg.org/")
 MUSIC = Namespace("http://musickg.org/data/")
 
 log = logging.getLogger(__name__)
 
-# Configurações do Servidor
+# Server Configuration
 GRAPHDB_URL = "http://localhost:7200"
 GRAPHDB_REPOSITORY = "music-kg-tp1"
 GRAPHDB_USER = "admin"
@@ -31,7 +30,6 @@ class _RDFStore:
         self._loaded: bool = False
         self._use_graphdb: bool = False
 
-        # Endpoints (resolvidos dinamicamente)
         self._sparql_url = f"{GRAPHDB_URL}/repositories/{GRAPHDB_REPOSITORY}"
         self._update_url = f"{self._sparql_url}/statements"
 
@@ -45,8 +43,8 @@ class _RDFStore:
 
     def load(self, nt_path: Path, stats_path: Path) -> None:
         """
-        Ponto de entrada no arranque do Django (AppConfig.ready).
-        Tenta configurar e carregar os dados no GraphDB automaticamente.
+        Initialization point during Django startup (AppConfig.ready).
+        Attempts to automatically configure and load data into GraphDB.
         """
         if self._loaded: return
 
@@ -57,46 +55,45 @@ class _RDFStore:
             except Exception:
                 pass
 
-        log.info("A iniciar ligação ao GraphDB...")
+        log.info("Starting connection to GraphDB...")
 
-        # Tenta ligar ao GraphDB com retries (para dar tempo ao Tomcat de arrancar)
+        # Connection retries
         for attempt in range(3):
             if self._try_graphdb(nt_path):
                 self._loaded = True
                 return
-            log.warning(f"GraphDB não respondeu (tentativa {attempt+1}/3). Aguardando 3s...")
+            log.warning(f"GraphDB not responding (attempt {attempt+1}/3). Waiting 3s...")
             time.sleep(3)
 
-        # Fallback Seguro: Em vez de bloquear o PC com rdflib, assume falha graciosa.
-        log.error("CRÍTICO: GraphDB não está acessível. A aplicação irá correr sem dados.")
+        # Secure Fallback: app runs in read-only/disconnected mode
+        log.error("CRITICAL: GraphDB unreachable. Application running in offline mode.")
         self._loaded = True
         self._use_graphdb = False
 
     def _try_graphdb(self, nt_path: Path) -> bool:
-        """Verifica se o repositório existe, cria-o se necessário e faz upload dos dados."""
+        """Checks repository existence, creates if necessary, and uploads data."""
         try:
-            # 1. Ping ao servidor
+            # 1. Server Ping
             r = requests.get(f"{GRAPHDB_URL}/rest/repositories", timeout=5, headers={"Accept": "application/json"})
             if r.status_code != 200:
                 return False
 
-            # 2. Verifica/Cria repositório
+            # 2. Verify/Create Repository
             repos = [rep.get("id") for rep in r.json()]
             if GRAPHDB_REPOSITORY not in repos:
-                log.info(f"Repositório '{GRAPHDB_REPOSITORY}' não existe. A criar (Ruleset: empty)...")
+                log.info(f"Repository '{GRAPHDB_REPOSITORY}' not found. Creating (Ruleset: empty)...")
                 if not self._create_repository():
                     return False
-                time.sleep(2) # Espera que o repositório inicialize internamente
+                time.sleep(2) # Wait for internal initialization
 
-            # 3. Verifica dados e faz upload se estiver vazio
+            # 3. Check data and perform upload if empty
             count = self._graphdb_triple_count()
             if count < 500 and nt_path.exists():
-                log.info(f"Repositório quase vazio ({count} triplos). A iniciar upload do ficheiro .nt...")
                 if self._upload_nt(nt_path):
-                    novo_count = self._graphdb_triple_count()
-                    log.info(f"Upload concluído com sucesso! O Grafo tem agora {novo_count:,} triplos.")
+                    new_count = self._graphdb_triple_count()
+                    log.info(f"Upload complete!")
                 else:
-                    log.error("Falha no upload automático.")
+                    log.error("Automatic upload failed.")
                     return False
 
             self._use_graphdb = True
@@ -104,11 +101,11 @@ class _RDFStore:
         except requests.exceptions.ConnectionError:
             return False
         except Exception as e:
-            log.warning(f"Erro na verificação do GraphDB: {e}")
+            log.warning(f"GraphDB verification error: {e}")
             return False
 
     def _create_repository(self) -> bool:
-        """Cria o repositório via API garantindo que o ruleset é 'empty' (Factos Puros)."""
+        """Creates a repository via API ('empty' ruleset)."""
         config = f"""
         @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
         @prefix rep: <http://www.openrdf.org/config/repository#> .
@@ -140,29 +137,27 @@ class _RDFStore:
             )
             return r.status_code in (200, 201)
         except Exception as e:
-            log.warning(f"Falha ao criar repositório: {e}")
+            log.warning(f"Failed to create repository: {e}")
             return False
 
     def _upload_nt(self, nt_path: Path) -> bool:
-        """Upload em streaming via /statements (O método mais estável do GraphDB)."""
+        """Streaming upload via /statements."""
         try:
             with open(nt_path, 'rb') as f:
-                # O parâmetro data=f faz com que a biblioteca requests envie o ficheiro
-                # gradualmente, evitando estourar a memória RAM e evitando erros 10053.
                 r = requests.post(
                     self._update_url,
                     data=f,
                     auth=(GRAPHDB_USER, GRAPHDB_PASS),
                     headers={'Content-Type': 'application/n-triples'},
-                    timeout=300 # 5 minutos de timeout para garantir tempo de escrita no disco
+                    timeout=300
                 )
 
             if r.status_code in (200, 204):
                 return True
-            log.error(f"GraphDB rejeitou o ficheiro. Código: {r.status_code}. Info: {r.text[:100]}")
+            log.error(f"GraphDB rejected the file. Code: {r.status_code}. Info: {r.text[:100]}")
             return False
         except Exception as e:
-            log.error(f"Erro na ligação de upload: {e}")
+            log.error(f"Upload connection error: {e}")
             return False
 
     def _graphdb_triple_count(self) -> int:
@@ -171,7 +166,7 @@ class _RDFStore:
         return int(rows[0].get("c", 0)) if rows else 0
 
     def execute_sparql(self, query_string: str) -> List[Dict[str, Any]]:
-        """Executa uma query SELECT e retorna uma lista de dicionários puros."""
+        """Executes a SELECT query and returns raw results as a dictionary list."""
         if not self._use_graphdb:
             return []
         try:
@@ -182,7 +177,7 @@ class _RDFStore:
                 timeout=45,
             )
             if r.status_code != 200:
-                log.warning(f"Erro SPARQL ({r.status_code}): {r.text[:100]}")
+                log.warning(f"SPARQL error ({r.status_code}): {r.text[:100]}")
                 return []
 
             data = r.json()
@@ -194,7 +189,6 @@ class _RDFStore:
                     if node:
                         val = node["value"]
                         typ = node.get("datatype", "")
-                        # Conversão simples de tipos básicos
                         if "integer" in typ or "int" in typ:
                             try: val = int(val)
                             except: pass
@@ -207,11 +201,11 @@ class _RDFStore:
                 rows.append(record)
             return rows
         except Exception as e:
-            log.warning(f"Exceção SPARQL: {e}")
+            log.warning(f"SPARQL exception: {e}")
             return []
 
     def execute_sparql_update(self, update_string: str) -> bool:
-        """Executa comandos INSERT / DELETE / UPDATE."""
+        """Executes INSERT / DELETE / UPDATE commands."""
         if not self._use_graphdb:
             return False
         try:
@@ -224,22 +218,21 @@ class _RDFStore:
             )
             return r.status_code in (200, 204)
         except Exception as e:
-            log.warning(f"Exceção SPARQL UPDATE: {e}")
+            log.warning(f"SPARQL UPDATE exception: {e}")
             return False
 
     def get_stats(self) -> dict:
         stats = dict(self._stats)
-        stats["backend"] = "GraphDB" if self._use_graphdb else "Desligado"
+        stats["backend"] = "GraphDB" if self._use_graphdb else "Disconnected"
         stats["graphdb_url"] = GRAPHDB_URL
         stats["repository"] = GRAPHDB_REPOSITORY
         return stats
 
     def execute_ask(self, query_string: str) -> bool:
-        """Executa uma query ASK e devolve True ou False."""
+        """Executes an ASK query and returns boolean result."""
         if not self._use_graphdb:
             return False
         try:
-            import requests
             r = requests.post(
                 self._sparql_url,
                 data={"query": query_string},
@@ -250,15 +243,14 @@ class _RDFStore:
                 return r.json().get("boolean", False)
             return False
         except Exception as e:
-            log.warning(f"Exceção SPARQL ASK: {e}")
+            log.warning(f"SPARQL ASK exception: {e}")
             return False
 
     def execute_graph_query(self, query_string: str, accept_format: str = "text/turtle") -> str:
-        """Executa queries DESCRIBE ou CONSTRUCT e devolve a string no formato RDF."""
+        """Executes DESCRIBE or CONSTRUCT queries and returns the RDF response."""
         if not self._use_graphdb:
             return ""
         try:
-            import requests
             r = requests.post(
                 self._sparql_url,
                 data={"query": query_string},
@@ -267,9 +259,9 @@ class _RDFStore:
             )
             if r.status_code == 200:
                 return r.text
-            return f"# Erro SPARQL: {r.status_code}\n{r.text}"
+            return f"# SPARQL Error: {r.status_code}\n{r.text}"
         except Exception as e:
-            return f"# Exceção de Rede: {e}"
+            return f"# Network Exception: {e}"
 
 # Singleton Instantiation
 store = _RDFStore()

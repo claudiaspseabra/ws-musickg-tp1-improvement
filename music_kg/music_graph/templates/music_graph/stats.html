@@ -1,27 +1,27 @@
 {% extends 'music_graph/base.html' %}
 
-{% block title %}Estatísticas - MusicKG{% endblock %}
+{% block title %}Statistics - MusicKG{% endblock %}
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-6 py-10">
-    <h1 class="text-4xl font-extrabold text-text-primary mb-8">📊 Insights do Grafo</h1>
+    <h1 class="text-4xl font-extrabold text-text-primary mb-8">📊 Graph Insights</h1>
 
     <p class="text-text-muted mb-10">
-        Estes gráficos são gerados em tempo real utilizando funções de agregação SPARQL
-        (<code>COUNT</code>, <code>AVG</code>, <code>GROUP BY</code>) sobre os dados brutos do Knowledge Graph.
+        These charts are generated in real-time using SPARQL aggregation functions
+        (<code>COUNT</code>, <code>AVG</code>, <code>GROUP BY</code>) directly on the Knowledge Graph's raw data.
     </p>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
 
         <div class="bg-bg-card p-6 rounded-xl border border-border-col">
-            <h2 class="text-xl font-bold mb-6 text-text-primary">Músicas por Género (Top 10)</h2>
+            <h2 class="text-xl font-bold mb-6 text-text-primary">Tracks by Genre (Top 10)</h2>
             <div class="relative h-72 w-full">
                 <canvas id="genresChart"></canvas>
             </div>
         </div>
 
         <div class="bg-bg-card p-6 rounded-xl border border-border-col">
-            <h2 class="text-xl font-bold mb-6 text-text-primary">Energia Média por Género</h2>
+            <h2 class="text-xl font-bold mb-6 text-text-primary">Average Energy by Genre</h2>
             <div class="relative h-72 w-full">
                 <canvas id="energyChart"></canvas>
             </div>
@@ -33,26 +33,24 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-    // Configurações Globais do Chart.js para combinar com o Dark Mode
     Chart.defaults.color = '#b3b3b3';
     Chart.defaults.borderColor = '#2a2a2a';
 
-    // Ler os dados injetados pelo Django (usamos o filtro safe para não escapar aspas do JSON)
     const g1Labels = {{ g1_labels|safe }};
     const g1Data = {{ g1_data|safe }};
 
     const g2Labels = {{ g2_labels|safe }};
     const g2Data = {{ g2_data|safe }};
 
-    // --- GRÁFICO 1: Barras (Músicas por Género) ---
+    // CHART 1: Bar Chart (Tracks per Genre)
     new Chart(document.getElementById('genresChart'), {
         type: 'bar',
         data: {
             labels: g1Labels,
             datasets: [{
-                label: 'Nº de Músicas',
+                label: 'Number of Tracks',
                 data: g1Data,
-                backgroundColor: '#1ed760', // A tua cor 'accent'
+                backgroundColor: '#1db954',
                 borderRadius: 4
             }]
         },
@@ -63,13 +61,13 @@
         }
     });
 
-    // --- GRÁFICO 2: Radar ou Polar (Energia Média) ---
+    // CHART 2: Polar Area Chart (Average Energy per Genre)
     new Chart(document.getElementById('energyChart'), {
-        type: 'polarArea', // Fica visualmente incrível para estatísticas sonoras
+        type: 'polarArea',
         data: {
             labels: g2Labels,
             datasets: [{
-                label: 'Nível de Energia',
+                label: 'Energy Level',
                 data: g2Data,
                 backgroundColor: [
                     'rgba(30, 215, 96, 0.7)',
@@ -86,7 +84,7 @@
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                r: { ticks: { display: false } } // esconde os números do eixo
+                r: { ticks: { display: false } }
             }
         }
     });

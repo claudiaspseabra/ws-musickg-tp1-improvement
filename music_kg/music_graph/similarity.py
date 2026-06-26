@@ -1,12 +1,6 @@
 """
-templates/similarity.py
-
-Recommendations engine — 3 algorithms:
-  1. Audio Feature Cosine Similarity   (numpy + scipy)
-  2. Genre Jaccard Similarity          (set intersection)
-  3. Combined score + "You may also like" tracks
+music_graph/similarity.py
 """
-
 import logging
 import time
 from functools import lru_cache
@@ -19,14 +13,15 @@ from music_graph.sparql_queries import _PREFIXES, _round, _slug
 
 log = logging.getLogger(__name__)
 
+# Recommendation weights
 AUDIO_WEIGHT      = 0.6
 GENRE_WEIGHT      = 0.4
 TOP_N_SIMILAR     = 10
 TOP_N_TRACKS      = 10
 TRACKS_PER_ARTIST = 3
 
-
 def _fetch_all_artist_features() -> List[Dict]:
+    """Retrieves average audio features for all artists from the graph."""
     q = _PREFIXES + """
     SELECT ?uri ?name
            (AVG(?energy)   AS ?avgEnergy)
@@ -46,8 +41,8 @@ def _fetch_all_artist_features() -> List[Dict]:
     """
     return store.execute_sparql(q)
 
-
 def _fetch_artist_genres() -> Dict[str, List[str]]:
+    """Maps artists to their list of genres."""
     q = _PREFIXES + """
     SELECT ?uri ?genreLabel WHERE {
         ?uri a music:Artist .
@@ -66,8 +61,8 @@ def _fetch_artist_genres() -> Dict[str, List[str]]:
                 genre_map[uri].append(g)
     return genre_map
 
-
 def _fetch_top_tracks_for_artists(artist_uris: List[str], exclude_uri: str) -> List[Dict]:
+    """Fetches popular tracks for a set of target artists."""
     if not artist_uris:
         return []
     values_block = " ".join(f"<{u}>" for u in artist_uris)
@@ -90,8 +85,8 @@ def _fetch_top_tracks_for_artists(artist_uris: List[str], exclude_uri: str) -> L
     """
     return store.execute_sparql(q)
 
-
 def _fetch_genre_companions(genres: List[str], exclude_uri: str, limit: int = 5) -> List[Dict]:
+    """Finds other artists sharing specific genres."""
     if not genres:
         return []
     results = []
@@ -114,17 +109,17 @@ def _fetch_genre_companions(genres: List[str], exclude_uri: str, limit: int = 5)
             results.append({"genre": genre, "artists": names})
     return results
 
-
 def _jaccard(set_a: set, set_b: set) -> float:
+    """Calculates Jaccard similarity index."""
     union = set_a | set_b
     return len(set_a & set_b) / len(union) if union else 0.0
-
 
 def _empty_result() -> Dict:
     return {"similar_artists": [], "recommended_tracks": [], "genre_companions": []}
 
 
 class _SimilarityEngine:
+    """Engine for computing artist similarity using numPy."""
     def __init__(self):
         self._built = False
         self._uris: List[str] = []
@@ -135,6 +130,7 @@ class _SimilarityEngine:
         self._uri_idx: Dict[str, int] = {}
 
     def build(self) -> None:
+        """Constructs the similarity matrix from the GraphDB data."""
         if self._built:
             return
         if not store.loaded:
@@ -142,7 +138,7 @@ class _SimilarityEngine:
             return
 
         t0 = time.time()
-        log.info("SimilarityEngine: fetching artist features …")
+        log.info("SimilarityEngine: fetching artist features...")
 
         rows = _fetch_all_artist_features()
         if not rows:
@@ -153,13 +149,12 @@ class _SimilarityEngine:
         uris, names, vectors = [], {}, []
         for r in rows:
             uri = str(r.get("uri", "") or "")
-            if not uri:
-                continue
+            if not uri: continue
             try:
                 energy = float(r.get("avgEnergy",   0) or 0)
                 dance  = float(r.get("avgDance",    0) or 0)
                 val    = float(r.get("avgValence",  0) or 0)
-                tempo  = float(np.clip(float(r.get("avgTempo",    0) or 0), 0, 1))
+                tempo  = float(np.clip(float(r.get("avgTempo", 0) or 0), 0, 1))
                 loud   = float(np.clip(float(r.get("avgLoudness", 0) or 0), 0, 1))
             except (TypeError, ValueError):
                 continue
@@ -176,11 +171,12 @@ class _SimilarityEngine:
         self._uri_idx = {u: i for i, u in enumerate(uris)}
         mat = np.array(vectors, dtype=np.float32)
         self._matrix  = mat
+
         norms = np.linalg.norm(mat, axis=1, keepdims=True)
         norms[norms == 0] = 1e-9
         self._matrix_norm = mat / norms
 
-        log.info("SimilarityEngine: fetching genres …")
+        log.info("SimilarityEngine: fetching genres...")
         self._genres = _fetch_artist_genres()
 
         elapsed = time.time() - t0
@@ -192,19 +188,19 @@ class _SimilarityEngine:
         return self._built and self._matrix_norm is not None and len(self._uris) > 0
 
     def recommend(self, artist_uri: str, top_n: int = TOP_N_SIMILAR) -> Dict:
+        """Performs multi-algorithm recommendation."""
         if not self.is_ready:
             return _empty_result()
         idx = self._uri_idx.get(artist_uri)
         if idx is None:
             return _empty_result()
 
-        # Algorithm 1 — cosine similarity (vectorised dot product)
+        # cosine similarity
         cosine_sims = (self._matrix_norm @ self._matrix_norm[idx]).copy()
         cosine_sims[idx] = -1.0
-
         src_genres = set(self._genres.get(artist_uri, []))
 
-        # Algorithm 2 — jaccard on top-50 cosine candidates
+        # jaccard similarity on top-50 candidates
         candidate_scores: List[Tuple[int, float, float, float]] = []
         for c_idx in np.argsort(cosine_sims)[-50:][::-1]:
             c_uri = self._uris[int(c_idx)]
@@ -231,7 +227,7 @@ class _SimilarityEngine:
             })
             top_uris.append(c_uri)
 
-        # Algorithm 3 — "You may also like" tracks
+        # songs recommendations
         track_rows = _fetch_top_tracks_for_artists(top_uris[:5], exclude_uri=artist_uri)
         seen: Dict[str, int] = {}
         candidates: List[Dict] = []
@@ -272,34 +268,20 @@ _engine = _SimilarityEngine()
 
 
 def build_engine() -> None:
-    """Called from AppConfig.ready() after store.load()."""
+    """Builds the engine after store initialization."""
     _engine.build()
-
 
 @lru_cache(maxsize=1000)
 def get_recommendations(artist_slug: str) -> Dict:
-    """
-    Main public API — called by views.py.
-    Cached per slug with lru_cache(maxsize=1000).
-
-    Output:
-    {
-      "similar_artists":    [{uri, slug, name, similarity_score,
-                               audio_distance, genre_jaccard, shared_genres}],
-      "recommended_tracks": [{track_uri, track_name, artist_name,
-                               because_similar_to, popularity, energy, danceability}],
-      "genre_companions":   [{genre, artists:[name,...]}]
-    }
-    """
+    """Cached public API for similarity recommendations."""
     return _engine.recommend(f"http://musickg.org/artist/{artist_slug}")
-
 
 def clear_recommendation_cache() -> None:
     get_recommendations.cache_clear()
     log.info("Recommendation cache cleared.")
 
-
 def engine_stats() -> Dict:
+    """Returns technical engine state for diagnostics."""
     return {
         "built":        _engine._built,
         "artist_count": len(_engine._uris),

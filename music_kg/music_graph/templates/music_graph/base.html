@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}MusicKG - Web Semântica{% endblock %}</title>
+    <title>{% block title %}MusicKG - Semantic Web{% endblock %}</title>
 
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -33,18 +34,21 @@
 
 <body class="antialiased min-h-screen flex flex-col">
 
+    <!-- Sticky Nav Bar -->
     <nav class="sticky top-0 z-50 bg-bg-secondary border-b border-border-col">
         <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-4">
 
+            <!-- Logo/Home Link -->
             <a href="{% url 'home' %}" class="flex items-center gap-2 shrink-0">
                 <span class="text-xl">🎵</span>
                 <span class="font-bold text-accent tracking-tight">MusicKG</span>
             </a>
 
+            <!-- Nav Links -->
             <div class="flex items-center gap-6 shrink-0">
 
                 <a href="{% url 'explore' %}" class="hidden sm:block text-sm font-bold hover:text-white transition-colors {% if request.resolver_match.url_name == 'explore' %}text-accent{% else %}text-text-secondary{% endif %}">
-                    Explorar
+                    Explore
                 </a>
 
                 <a href="{% url 'timeline' %}" class="hidden sm:block text-sm font-bold hover:text-white transition-colors {% if request.resolver_match.url_name == 'timeline' %}text-accent{% else %}text-text-secondary{% endif %}">
@@ -52,15 +56,16 @@
                 </a>
 
                 <a href="{% url 'stats' %}" class="hidden sm:block text-sm font-bold hover:text-white transition-colors {% if request.resolver_match.url_name == 'stats' %}text-accent{% else %}text-text-secondary{% endif %}">
-                    Estatísticas
+                    Stats
                 </a>
 
+                <!-- Search Bar -->
                 <form action="{% url 'search' %}" method="GET" class="flex items-center gap-2">
-                    <input type="text" name="q" placeholder="Procurar artistas..."
+                    <input type="text" name="q" placeholder="Search artists, albums..."
                            class="bg-bg-card border border-border-col rounded-full px-4 py-1.5 text-sm text-text-primary focus:border-accent outline-none w-48 lg:w-64">
                     <input type="hidden" name="type" value="all">
                     <button type="submit" class="px-4 py-1.5 bg-accent text-black font-bold text-sm rounded-full hover:bg-accent-hover transition-colors">
-                        Pesquisar
+                        Search
                     </button>
                 </form>
 
@@ -69,14 +74,16 @@
         </div>
     </nav>
 
+    <!-- Main Content Block -->
     <main class="flex-grow">
         {% block content %}
         {% endblock content %}
     </main>
 
+    <!-- Footer -->
     <footer class="bg-bg-secondary border-t border-border-col py-6 px-6 mt-auto text-center text-xs text-text-muted">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-2">
-            <p>&copy; 2026 MusicKG — Trabalho Prático 1 (Grafo Factual SPARQL Puro)</p>
+            <p>&copy; 2026 MusicKG — Semantic Web Project | University of Aveiro </p>
             <p class="font-mono text-accent">Status: GraphDB Connected</p>
         </div>
     </footer>

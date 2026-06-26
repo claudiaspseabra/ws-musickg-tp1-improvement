@@ -78,7 +78,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
-CORS_ALLOW_ALL_ORIGINS = DEBUG  # convenient during development
+CORS_ALLOW_ALL_ORIGINS = DEBUG
 
 # ── RDF paths ─────────────────────────────────────────────────────────────────
 RDF_NT_PATH = BASE_DIR / 'data' / 'music_kg.nt'

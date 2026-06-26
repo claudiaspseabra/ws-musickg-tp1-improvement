@@ -1,12 +1,15 @@
 """
-templates/models.py
-Minimal Django DB models — metadata & logging only.
-The actual data lives in the RDF graph (rdf_store.py).
+music_graph/models.py
+Minimal Django database models for metadata and logging purposes.
+Note: Primary domain data is persisted in the RDF Knowledge Graph (via rdf_store.py).
 """
 from django.db import models
 
 
 class SPARQLQueryTemplate(models.Model):
+    """
+    Stores reusable SPARQL query templates used for advanced analytics and data exploration within the application.
+    """
     CATEGORY_CHOICES = [
         ('exploration', 'Exploration'),
         ('analysis',    'Analysis'),
@@ -29,6 +32,9 @@ class SPARQLQueryTemplate(models.Model):
 
 
 class SearchLog(models.Model):
+    """
+    Logs user search queries to track activity and measure system performance.
+    """
     query               = models.CharField(max_length=500)
     results_count       = models.IntegerField(default=0)
     entity_types_found  = models.JSONField(default=dict)
