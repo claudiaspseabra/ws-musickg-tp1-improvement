@@ -73,31 +73,33 @@ class _RDFStore:
     def _try_graphdb(self, nt_path: Path) -> bool:
         """Checks repository existence, creates if necessary, and uploads data."""
         try:
-            # 1. Server Ping
             r = requests.get(f"{GRAPHDB_URL}/rest/repositories", timeout=5, headers={"Accept": "application/json"})
             if r.status_code != 200:
                 return False
 
-            # 2. Verify/Create Repository
             repos = [rep.get("id") for rep in r.json()]
             if GRAPHDB_REPOSITORY not in repos:
                 log.info(f"Repository '{GRAPHDB_REPOSITORY}' not found. Creating (Ruleset: empty)...")
                 if not self._create_repository():
                     return False
-                time.sleep(2) # Wait for internal initialization
+                time.sleep(2)
 
-            # 3. Check data and perform upload if empty
+            self._use_graphdb = True
+
             count = self._graphdb_triple_count()
-            if count < 500 and nt_path.exists():
+
+            if count == 0 and nt_path.exists():
+                log.info("Repository is empty. Starting initial data upload...")
                 if self._upload_nt(nt_path):
                     new_count = self._graphdb_triple_count()
-                    log.info(f"Upload complete!")
+                    log.info(f"Upload complete! Inserted {new_count} triples.")
                 else:
                     log.error("Automatic upload failed.")
                     return False
-
-            self._use_graphdb = True
+            else:
+                log.info(f"GraphDB active with {count} triples. Skipping upload.")
             return True
+
         except requests.exceptions.ConnectionError:
             return False
         except Exception as e:

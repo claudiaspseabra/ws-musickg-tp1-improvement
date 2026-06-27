@@ -214,4 +214,17 @@
         </div>
     </div>
 </div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let savedScrollPosition = sessionStorage.getItem("artistPageScroll");
+        if (savedScrollPosition !== null) {
+            window.scrollTo(0, parseInt(savedScrollPosition));
+            sessionStorage.removeItem("artistPageScroll");
+        }
+    });
+
+    window.addEventListener("beforeunload", function() {
+        sessionStorage.setItem("artistPageScroll", window.scrollY);
+    });
+</script>
 {% endblock %}

@@ -126,6 +126,7 @@ def add_track_view(request, slug):
         energy = request.POST.get("energy", 0.5)
         album_slug = request.POST.get("album_slug")
 
+
         if sq.ask_track_exists(slug, track_name):
             messages.warning(request, f"The track '{track_name}' already exists for this artist!")
         else:
@@ -144,18 +145,25 @@ def edit_track_view(request, slug):
         track_name = request.POST.get("track_name")
         genre_name = request.POST.get("genre_name")
         energy = request.POST.get("energy")
-        artist_slug = request.POST.get("artist_slug")
-        album_slug = request.POST.get("album_slug")
+        track_number = request.POST.get("track_number")
 
-        if sq.update_track(slug, track_name, genre_name, float(energy)):
+        if sq.update_track(slug, track_name, genre_name, float(energy), track_number):
             messages.success(request, f"Track '{track_name}' updated!")
         else:
             messages.error(request, "Error updating the track.")
+
+        previous_url = request.META.get('HTTP_REFERER')
+        if previous_url:
+            return redirect(previous_url)
+
+        artist_slug = request.POST.get("artist_slug")
+        album_slug = request.POST.get("album_slug")
 
         if album_slug:
             return redirect('album-detail', slug=album_slug)
         if artist_slug:
             return redirect('artist-detail', slug=artist_slug)
+
     return redirect('home')
 
 def delete_track_view(request, slug):
@@ -168,6 +176,10 @@ def delete_track_view(request, slug):
             messages.success(request, "Track permanently deleted from the system!")
         else:
             messages.error(request, "Error deleting the track.")
+
+        previous_url = request.META.get('HTTP_REFERER')
+        if previous_url:
+            return redirect(previous_url)
 
         if album_slug:
             return redirect('album-detail', slug=album_slug)
@@ -189,12 +201,12 @@ def create_album_view(request, artist_slug):
         release_year_str = request.POST.get("release_year", "2024").strip()
 
         if album_name and release_year_str.isdigit():
-            # 1. Check if the album already exists using the ASK constraint
+            # check if the album already exists using the ASK constraint
             if sq.ask_album_exists(artist_slug, album_name):
                 messages.warning(request, f"The album '{album_name}' already exists in the Graph for this artist!")
                 return redirect('artist-detail', slug=artist_slug)
 
-            # 2. If it does not exist, initialize it in the Graph
+            # if it does not exist, initialize it in the Graph
             album_slug = sq.create_new_album(
                 artist_slug,
                 album_name,
