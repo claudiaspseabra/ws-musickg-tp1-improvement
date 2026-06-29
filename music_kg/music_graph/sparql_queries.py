@@ -101,6 +101,7 @@ def get_artist_detail(artist: str) -> Optional[Dict]:
                     ?trackUri music:energy ?energy .
                     ?g music:label ?genreLabel .
                 }}
+                OPTIONAL {{ ?trackUri music:popularity ?pop . }}
             }}
             GROUP BY ?trackUri ?trackName
             ORDER BY ?trackName
@@ -121,6 +122,7 @@ def get_artist_detail(artist: str) -> Optional[Dict]:
             "slug": _slug(str(r["trackUri"])),
             "name": str(r["trackName"]),
             "genre": genre_str if genre_str else "No genre",
+            "popularity": _int(r.get("trackPop", 0)),
             "energy": str(r.get("trackEnergy", "0.5")),
         })
 
@@ -253,6 +255,7 @@ def get_album_detail(album_slug: str) -> Optional[Dict]:
                       music:trackName ?trackName .
             OPTIONAL {{
                 ?trackUri music:inGenre ?g .
+                ?trackUri music:popularity ?pop .
                 OPTIONAL {{ ?g music:label ?lbl . }}
                 BIND(COALESCE(?lbl, REPLACE(STR(?g), "^.*/", "")) AS ?rawLabel)
             }}
@@ -279,6 +282,7 @@ def get_album_detail(album_slug: str) -> Optional[Dict]:
             "name": str(r["trackName"]),
             "genre": ", ".join(sorted(list(set(track_genres)))) if track_genres else "No genre",
             "energy": str(r.get("trackEnergy", "0.5")),
+            "popularity": _int(r.get("pop", 0)),
             "track_number": str(r.get("trackNumber", ""))
         })
 
@@ -371,7 +375,7 @@ def delete_artist(artist_slug: str) -> bool:
     """
     return store.execute_sparql_update(query)
 
-def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: float, album_slug: str = None) -> bool:
+def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: float, popularity: int, album_slug: str = None) -> bool:
     """Inserts a new track. Optionally links it to an album."""
     t_id = str(uuid.uuid4())[:8]
     t_uri = f"<http://musickg.org/track/{t_id}>"
@@ -393,6 +397,7 @@ def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: fl
                 music:performedBy {a_uri} ;
                 music:inGenre {g_uri} ;
                 music:energy "{energy}"^^xsd:float .
+                music:popularity "{popularity}"^^xsd:integer .
         {album_triple}
         {g_uri} music:label "{genre_name}" .
     }}
@@ -400,7 +405,7 @@ def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: fl
     return store.execute_sparql_update(query)
 
 
-def update_track(track_slug: str, track_name: str, genre_name: str, energy: float, track_number: str = "") -> bool:
+def update_track(track_slug: str, track_name: str, genre_name: str, energy: float, popularity: int, track_number: str = "") -> bool:
     """Updates the name, genre, energy and track number of an existing track bulletproofly."""
     safe_slug = quote(track_slug, safe="")
     t_uri = f"<http://musickg.org/track/{safe_slug}>"
@@ -418,6 +423,8 @@ def update_track(track_slug: str, track_name: str, genre_name: str, energy: floa
             {{ {t_uri} music:inGenre ?oldGenre . }}
             UNION
             {{ {t_uri} music:energy ?oldEnergy . }}
+            UNION
+            {{ {t_uri} music:popularity ?oldPop . }}
             UNION
             {{ {t_uri} music:trackNumber ?oldNum . }}
         }}
@@ -443,7 +450,8 @@ def update_track(track_slug: str, track_name: str, genre_name: str, energy: floa
     insert_query = _PREFIXES + f"""
         INSERT DATA {{
             {t_uri} music:trackName "{track_name}" ;
-                    music:energy "{energy}"^^xsd:float .
+                    music:energy "{energy}"^^xsd:float ;
+                    music:popularity "{popularity}"^^xsd:integer .
             {insert_genre_triples}
             {track_num_triple}
         }}

@@ -83,6 +83,7 @@
                 <div class="flex gap-2">
                     <input type="text" name="genre_name" required placeholder="Genre (e.g. Pop)" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
                     <input type="number" step="0.001" min="0" max="1" name="energy" required value="0.8" title="Energy" class="w-1/2 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
+                    <input type="number" min="0" max="100" name="popularity" required value="50" title="Popularity (0-100)" placeholder="Pop (0-100)" class="w-1/3 bg-bg-secondary border border-border-col rounded px-3 py-2 text-sm text-white">
                 </div>
                 <button type="submit" class="bg-accent text-black font-bold px-4 py-2 rounded hover:bg-accent-hover text-sm">
                     + Create & Add
@@ -103,7 +104,7 @@
                     </div>
                     <div>
                         <p class="font-bold text-text-primary">{{ track.name }}</p>
-                        <p class="text-xs text-text-muted">{{ track.genre|title }} • Energy: {{ track.energy }}</p>
+                        <p class="text-xs text-text-muted">{{ track.genre|title }} • Energy: {{ track.energy }} • Pop: {{ track.popularity }}</p>
                     </div>
                 </div>
 
@@ -148,6 +149,10 @@
                     <div class="w-20 shrink-0">
                         <label class="text-xs block mb-1">Energy</label>
                         <input type="number" step="0.001" min="0" max="1" name="energy" value="{{ track.energy }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white text-center">
+                    </div>
+                    <div class="w-16 shrink-0">
+                        <label class="text-xs block mb-1">Pop</label>
+                        <input type="number" min="0" max="100" name="popularity" value="{{ track.popularity }}" required class="w-full bg-bg-card border border-border-col rounded px-2 py-1 text-white text-center">
                     </div>
                     <button type="submit" class="bg-accent text-black font-bold px-3 py-1 rounded hover:bg-accent-hover h-[30px] shrink-0">
                         Save
