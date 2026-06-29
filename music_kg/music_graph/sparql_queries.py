@@ -385,9 +385,11 @@ def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: fl
         alb_uri = f"<http://musickg.org/album/{quote(album_slug, safe='')}>"
         album_triple = f"{t_uri} music:inAlbum {alb_uri} ."
 
+    safe_track_name = track_name.replace('"', '\\"')
+
     query = _PREFIXES + f"""
     INSERT DATA {{
-        {t_uri} music:trackName "{track_name}" ;
+        {t_uri} music:trackName "{safe_track_name}" ;
                 music:performedBy {a_uri} ;
                 music:inGenre {g_uri} ;
                 music:energy "{energy}"^^xsd:float .
