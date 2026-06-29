@@ -9,6 +9,7 @@ from music_graph import sparql_queries as sq
 from music_graph.rdf_store import store
 
 import json
+import urllib
 
 # HOME / SEARCH / STATS
 
@@ -86,13 +87,19 @@ def stats_view(request):
 
 def artist_detail(request, slug):
     """Detailed view for a specific artist."""
-    artist_data = sq.get_artist_detail(slug)
+    slug_decoded = urllib.parse.unquote(slug)
+
+    artist_data = sq.get_artist_detail(slug_decoded)
+
+    if not artist_data:
+        slug_encoded = urllib.parse.quote(slug_decoded)
+        artist_data = sq.get_artist_detail(slug_encoded)
+
     if not artist_data:
         raise Http404("Artist not found in the Knowledge Graph.")
 
-    context = {
-        'artist': artist_data,
-    }
+    context = { 'artist': artist_data }
+
     return render(request, 'music_graph/artist_detail.html', context)
 
 def create_artist_view(request):
