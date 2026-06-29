@@ -138,7 +138,7 @@ def add_track_view(request, slug):
         if sq.ask_track_exists(slug, track_name):
             messages.warning(request, f"The track '{track_name}' already exists for this artist!")
         else:
-            if sq.add_new_track(slug, track_name, genre_name, float(energy), album_slug):
+            if sq.add_new_track(slug, track_name, genre_name, float(energy), int(popularity), album_slug):
                 messages.success(request, f"Track '{track_name}' successfully created!")
             else:
                 messages.error(request, "Error creating track.")
@@ -156,7 +156,7 @@ def edit_track_view(request, slug):
         popularity = request.POST.get("popularity", 50)
         track_number = request.POST.get("track_number")
 
-        if sq.update_track(slug, track_name, genre_name, float(energy), track_number):
+        if sq.update_track(slug, track_name, genre_name, float(energy), int(popularity), track_number):
             messages.success(request, f"Track '{track_name}' updated!")
         else:
             messages.error(request, "Error updating the track.")

@@ -92,7 +92,7 @@ def get_artist_detail(artist: str) -> Optional[Dict]:
 
     # Tracks and genres
     tracks_q = _PREFIXES + f"""
-            SELECT ?trackUri ?trackName (GROUP_CONCAT(DISTINCT ?genreLabel; SEPARATOR=", ") AS ?genres) (SAMPLE(?energy) AS ?trackEnergy)
+            SELECT ?trackUri ?trackName (GROUP_CONCAT(DISTINCT ?genreLabel; SEPARATOR=", ") AS ?genres) (SAMPLE(?energy) AS ?trackEnergy) (SAMPLE(?pop) AS ?trackPop)
             WHERE {{
                 ?trackUri music:performedBy {artist_ref} ;
                           music:trackName ?trackName .
@@ -250,6 +250,7 @@ def get_album_detail(album_slug: str) -> Optional[Dict]:
         SELECT ?trackUri ?trackName ?trackNumber
                 (GROUP_CONCAT(DISTINCT ?rawLabel; SEPARATOR="|") AS ?genres) 
                 (SAMPLE(?energy) AS ?trackEnergy)
+                (SAMPLE(?pop) AS ?trackPop)
         WHERE {{
             ?trackUri music:inAlbum {album_ref} ;
                       music:trackName ?trackName .
@@ -282,7 +283,7 @@ def get_album_detail(album_slug: str) -> Optional[Dict]:
             "name": str(r["trackName"]),
             "genre": ", ".join(sorted(list(set(track_genres)))) if track_genres else "No genre",
             "energy": str(r.get("trackEnergy", "0.5")),
-            "popularity": _int(r.get("pop", 0)),
+            "popularity": _int(r.get("trackPop", 0)),
             "track_number": str(r.get("trackNumber", ""))
         })
 
@@ -396,7 +397,7 @@ def add_new_track(artist_slug: str, track_name: str, genre_name: str, energy: fl
         {t_uri} music:trackName "{safe_track_name}" ;
                 music:performedBy {a_uri} ;
                 music:inGenre {g_uri} ;
-                music:energy "{energy}"^^xsd:float .
+                music:energy "{energy}"^^xsd:float ;
                 music:popularity "{popularity}"^^xsd:integer .
         {album_triple}
         {g_uri} music:label "{genre_name}" .
